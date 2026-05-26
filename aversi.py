@@ -22,23 +22,31 @@ from common import paginate, sleep_between
 def _fetch_html(url: str) -> str:
     """
     ავერსის ბლოკირების ასავლელი ფუნქცია Playwright-ის სწრაფი ჩატვირთვით.
+    ავტომატურად აინსტალირებს ბრაუზერს Streamlit Cloud-ზე, თუ ის არ არსებობს.
     """
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
         raise RuntimeError(
-            "Anaconda-ში Playwright არ არის დაინსტალირებული."
+            "Playwright არ არის დაინსტალირებული requirements.txt-ში."
         ) from exc
+
+    # 🔥 ავტომატური ბრაუზერის ინსტალაცია Streamlit Cloud-ისთვის
+    try:
+        import os
+        import subprocess
+        # ვამოწმებთ, უკვე დაყენებულია თუ არა ბრაუზერი ქეშში
+        if not os.path.exists(os.path.expanduser("~/.cache/ms-playwright")):
+            subprocess.run(["playwright", "install", "chromium"], check=True)
+    except Exception as install_err:
+        # თუ ინსტალაციისას რამე პრობლემა მოხდა, ჩუმად აგრძელებს
+        pass
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        # რეალური მომხმარებლის იმიტაცია
         page = browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
         
-        # 🔥 გასწორდა: ველოდებით მხოლოდ DOM-ის ჩატვირთვას (ბევრად სწრაფია და არ ვარდება თაიმაუტი)
         page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        
-        # დამატებითი პატარა პაუზა, რომ პროდუქტები ნამდვილად გამოჩნდეს ეკრანზე
         page.wait_for_timeout(2000) 
         
         html = page.content()
