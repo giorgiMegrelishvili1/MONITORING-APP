@@ -247,16 +247,36 @@ with tab2:
 
 with tab3:
     if not filtered.empty:
-        available_cols = [COL_NAME, COL_SOURCE, COL_PRICE]
-        if COL_OLD_PRICE in filtered.columns:
-            available_cols.append(COL_OLD_PRICE)
-        if COL_CATEGORY in filtered.columns:
-            available_cols.append(COL_CATEGORY)
-        if COL_URL in filtered.columns:
-            available_cols.append(COL_URL)
+        # 1. ვქმნით ცხრილის დროებით ასლს, რომ ორიგინალი მონაცემები არ ავურიოთ
+        display_df = filtered.copy()
+        
+        # 2. განვსაზღვროთ რომელი სვეტები გვინდა რომ გამოჩნდეს ცხრილში
+        # (COL_NAME = სახელი, COL_SOURCE = წყარო, COL_PRICE = ფასი)
+        cols_to_show = [COL_NAME, COL_SOURCE, COL_PRICE]
+        
+        # ვამოწმებთ, საერთოდ არსებობს თუ არა ბაზაში ძველი ფასის (ფასდაკლების) სვეტი
+        if COL_OLD_PRICE in display_df.columns:
+            cols_to_show.append(COL_OLD_PRICE)
             
+        # 3. ვტოვებთ მხოლოდ საჭირო სვეტებს
+        display_df = display_df[cols_to_show]
+        
+        # 4. 🔄 სვეტების გადარქმევის ლოგიკა თქვენი მოთხოვნის მიხედვით
+        rename_dict = {
+            COL_NAME: "პროდუქტის დასახელება",
+            COL_SOURCE: "აფთიაქი",
+            COL_PRICE: "ფასი"
+        }
+        
+        # თუ ფასდაკლების სვეტი არის, მასაც გადავარქმევთ სახელს
+        if COL_OLD_PRICE in display_df.columns:
+            rename_dict[COL_OLD_PRICE] = "ფასდაკლებული ფასი"
+            
+        display_df = display_df.rename(columns=rename_dict)
+        
+        # 5. გამოვსახოთ ცხრილი ეკრანზე
         st.dataframe(
-            filtered[available_cols],
+            display_df,
             use_container_width=True,
             hide_index=True
         )
