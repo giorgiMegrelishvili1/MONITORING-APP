@@ -134,9 +134,11 @@ selected_sources = st.sidebar.multiselect(
     default=["PSP", "Aversi", "GEPHA/GPC"]
 )
 
-pages_psp = st.sidebar.slider("PSP გვერდები", 1, MAX_PAGES_PSP, 3)
-pages_aversi = st.sidebar.slider("Aversi გვერდები", 1, MAX_PAGES_AVERSI, 3)
-pages_gpc = st.sidebar.slider("GPC გვერდები", 1, MAX_PAGES_GPC, 3)
+# გვერდების ხელით კონტროლი მოიხსნა. პროგრამა ყველაფერს სრულად წამოიღებს ავტომატურად.
+pages_psp = MAX_PAGES_PSP
+pages_aversi = MAX_PAGES_AVERSI
+pages_gpc = MAX_PAGES_GPC
+
 
 # მონაცემების ჩატვირთვა
 with st.spinner("მონაცემები ახლდება, გთხოვთ დაელოდოთ..."):
