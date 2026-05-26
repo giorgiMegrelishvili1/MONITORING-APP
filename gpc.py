@@ -31,31 +31,44 @@ def _page_url(base: str, page: int) -> str:
 
 def _parse_price_block(card) -> tuple[float | None, float | None]:
     """
-    ზუსტად კითხულობს ფინალურ და ძველ ფასებს GPC-ის ახალი სტრუქტურიდან.
-    სრულად უგულებელყოფს პროცენტებს (-30.0%), რაც ფასების არევას იწვევდა.
+    ზუსტად კითხულობს ფასს მხოლოდ ფასის კონკრეტული ელემენტებიდან.
+    სრულად გამორიცხავს პროდუქტის სახელში არსებულ ციფრებს (მაგ. 3, 12თვ+).
     """
     final = None
     old = None
     
-    # 1. ვიღებთ ბლოკის სრულ ტექსტს
-    text_content = card.get_text(" ", strip=True)
-    
-    # 2. ვასუფთავებთ ტექსტს პროცენტის ნიშნებისგან, რომ ციფრებში არ შემოგვეპაროს
-    text_content = re.sub(r"-\d+(?:[.,]\d+)?%", "", text_content)  # შლის მაგ. "-30.0%"
-    text_content = text_content.replace("₾", "").strip()
-    
-    # 3. ვეძებთ მხოლოდ დარჩენილ რეალურ ფასებს
-    prices = [float(m.replace(",", ".")) for m in re.findall(r"(\d+(?:[.,]\d+)?)", text_content)]
-    
-    # 4. ფასების განაწილება ლოგიკით
-    if len(prices) >= 2:
-        # პირველი არის ახალი ფასი (მაგ. 7.60), მეორე - ძველი (მაგ. 10.85)
-        final = prices[0]
-        if prices[1] > prices[0]:
-            old = prices[1]
-    elif len(prices) == 1:
-        final = prices[0]
-        
+    # GPC-ზე რეალური ფასი თითქმის ყოველთვის დევს 'div[content]' ატრიბუტში
+    final_el = card.select_one("div[content]")
+    if final_el and final_el.get("content"):
+        try:
+            final = float(final_el["content"])
+        except ValueError:
+            pass
+            
+    # თუ content ატრიბუტი არ დაგვხვდა, ფასს ვეძებთ სპეციალურ ფასის კონტეინერში (სადაც სახელი არ ურევია)
+    if final is None:
+        price_container = card.select_one("[class*='price'], [class*='Price'], div:has(> span:contains('₾'))")
+        if price_container:
+            # სუფთა ფასის ამოკრეფა მხოლოდ ფასის ბლოკიდან
+            clean_text = price_container.get_text(" ", strip=True).replace("₾", "").strip()
+            # ვშლით პროცენტებს, თუ კონტეინერში დაგვხვდა
+            clean_text = re.sub(r"-\d+(?:[.,]\d+)?%", "", clean_text)
+            nums = [float(m.replace(",", ".")) for m in re.findall(r"(\d+(?:[.,]\d+)?)", clean_text)]
+            if nums:
+                final = nums[0]
+                if len(nums) >= 2 and nums[1] > nums[0]:
+                    old = nums[1]
+
+    # ცალკე ვეძებთ ხაზგადასმულ ძველ ფასს, თუ ის კონტეინერის გარეთაა
+    strike = card.select_one(".line-through, .ty-strike, [class*='line-through']")
+    if strike and old refinement is None:
+        strike_text = strike.get_text(" ", strip=True).replace("₾", "").replace(",", ".").strip()
+        m_old = re.search(r"(\d+(?:[.,]\d+)?)", strike_text)
+        if m_old:
+            candidate_old = float(m_old.group(1))
+            if final and candidate_old > final:
+                old = candidate_old
+                
     return final, old
 
 
@@ -64,8 +77,8 @@ def _parse_html(html: str, page_url: str) -> list[dict]:
     seen: set[str] = set()
     rows: list[dict] = []
 
-    # ახალი სელექტორი, რომელიც პოულობს პროდუქტის ნებისმიერ ბლოკს/ბარათს გვერდზე
-    for card in soup.select("div:has(> a[href*='product=']), div:has(> [class*='cart'])"):
+    # ვპოულობთ პროდუქტის ბარათებს
+    for card in soup.select("div:has(> a[href*='product=']), [class*='product-item'], div:has(> [class*='cart'])"):
         a = card.select_one("a[href*='product=']")
         if not a:
             continue
@@ -80,18 +93,20 @@ def _parse_html(html: str, page_url: str) -> list[dict]:
         if m:
             product_id = m.group(1)
 
-        # სახელის ამოღება უსაფრთხოდ
+        # სახელის ამოღება უსაფრთხოდ (მხოლოდ ტექსტური თეგებიდან)
         name = ""
         img = card.select_one("img[alt]")
         if img and img.get("alt"):
             name = img["alt"].strip()
+            
         if not name:
-            name = card.get_text(" ", strip=True).split("₾")[0].strip()
+            # თუ სურათს არ აქვს alt, ვიღებთ ტექსტს მხოლოდ სათაურის ლინკიდან
+            name = a.get_text(" ", strip=True)
             
         if not name or len(name) < 3:
             continue
 
-        # ფასების წაკითხვა
+        # ფასების წაკითხვა დაზუსტებული ბლოკიდან
         final, old = _parse_price_block(card)
         if final is None:
             continue
