@@ -99,14 +99,15 @@ def load_all_data(
         except Exception as e:
             st.warning(f"შეცდომა PSP-ს სკრაპინგისას: {e}")
             
-    if "Aversi" in sources:
+        if "Aversi" in sources:
         try:
             res_aversi = scrape_aversi(max_aversi)
             if res_aversi and isinstance(res_aversi, list):
                 all_dfs.append(pd.DataFrame(res_aversi))
         except Exception as e:
-            # 🔥 გასწორდა: აღარ აჩვენებს წითელ ერორს და ჩუმად აგრძელებს მუშაობას
-            pass
+            # 🔍 გამოვაჩინოთ რეალური შეცდომა დიაგნოსტიკისთვის
+            st.error(f"ავერსის რეალური შეცდომა: {e}")
+
 
     if "GEPHA/GPC" in sources:
         try:
