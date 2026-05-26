@@ -250,35 +250,35 @@ with tab3:
         # 1. ვქმნით ცხრილის დროებით ასლს
         display_df = filtered.copy()
         
-        # 2. განვსაზღვროთ საჩვენებელი სვეტები სწორი თანმიმდევრობით
-        # ჯერ სახელი და აფთიაქი
-        cols_to_show = [COL_NAME, COL_SOURCE]
+        # 2. 🧠 ჭკვიანი გადაანაწილების ლოგიკა იდეალური ფასებისთვის
+        def adjust_prices(row):
+            # თუ COL_OLD_PRICE (ძველი ფასი) არსებობს და შევსებულია, ესე იგი ფასდაკლებაა
+            if COL_OLD_PRICE in row and pd.notna(row[COL_OLD_PRICE]) and row[COL_OLD_PRICE] > 0:
+                return pd.Series([row[COL_OLD_PRICE], row[COL_PRICE]])
+            else:
+                # თუ ფასდაკლება არ არის, მიმდინარე ფასი მიდის ძირითად "ფასში", ხოლო ფასდაკლებული ცარიელია (None)
+                return pd.Series([row[COL_PRICE], None])
+                
+        # ვიყენებთ ფუნქციას ორ ახალ დროებით სვეტზე
+        display_df[["საბოლოო_ფასი", "საბოლოო_ფასდაკლებული"]] = display_df.apply(adjust_prices, axis=1)
         
-        # თუ პროდუქტს აქვს ძველი (პირვანდელი) ფასი, გამოვაჩინოთ ის წინ
-        if COL_OLD_PRICE in display_df.columns:
-            cols_to_show.append(COL_OLD_PRICE)
-            
-        # შემდეგ მოდის მიმდინარე აქტიური ფასი, რასაც იხდიან
-        cols_to_show.append(COL_PRICE)
+        # 3. განვსაზღვროთ საჩვენებელი სვეტები სწორი თანმიმდევრობით
+        display_df["პროდუქტის დასახელება"] = display_df[COL_NAME]
+        display_df["აფთიაქი"] = display_df[COL_SOURCE]
+        display_df["ფასი"] = display_df["საბოლოო_ფასი"]
+        display_df["ფასდაკლებული ფასი"] = display_df["საბოლოო_ფასდაკლებული"]
         
-        # ბოლოში კი ბმული
+        cols_to_show = ["პროდუქტის დასახელება", "აფთიაქი", "ფასი", "ფასდაკლებული ფასი"]
+        
+        # ბმულის დამატება
         if COL_URL in display_df.columns:
-            cols_to_show.append(COL_URL)
+            display_df["საიტზე გადასვლა"] = display_df[COL_URL]
+            cols_to_show.append("საიტზე გადასვლა")
             
+        # ვტოვებთ მხოლოდ საბოლოო სუფთა სვეტებს
         display_df = display_df[cols_to_show]
         
-        # 3. 🔄 სვეტების გადარქმევის ლოგიკა (ადგილები შევუცვალეთ თქვენი მოთხოვნის მიხედვით!)
-        rename_dict = {
-            COL_NAME: "პროდუქტის დასახელება",
-            COL_SOURCE: "აფთიაქი",
-            COL_OLD_PRICE: "ფასი",              # ძველი, პირვანდელი ფასი
-            COL_PRICE: "ფასდაკლებული ფასი",    # ახალი, შეღავათიანი ფასი
-            COL_URL: "საიტზე გადასვლა"
-        }
-            
-        display_df = display_df.rename(columns=rename_dict)
-        
-        # 4. გამოვსახოთ ლამაზი დაწკაპუნებადი ცხრილი
+        # 4. გამოვსახოთ იდეალურად დალაგებული ცხრილი ეკრანზე
         st.dataframe(
             display_df,
             use_container_width=True,
