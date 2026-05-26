@@ -17,7 +17,8 @@ from config import (
     COL_URL,
     HEADERS,
 )
-from scrapers.common import get_session, paginate, sleep_between
+# 🔥 გასწორდა: წაიშალა scrapers. პრეფიქსი
+from common import get_session, paginate, sleep_between
 
 
 def _is_cloudflare(html: str) -> bool:
@@ -112,7 +113,8 @@ def _detect_last_page(html: str) -> int:
     return max(pages) if pages else 1
 
 
-def scrape_aversi(*, max_pages: int) -> list[dict]:
+# 🔥 გასწორდა: მოიხსნა ვარსკვლავი (*), რათა პოზიციური არგუმენტი app.py-დან სწორად შემოვიდეს
+def scrape_aversi(max_pages: int) -> list[dict]:
     first_html = _fetch_html(AVERSI_LIST_URL)
     last = min(_detect_last_page(first_html), max_pages)
 
