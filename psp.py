@@ -16,9 +16,9 @@ from config import (
     PSP_GRAPHQL_URL,
     PSP_PAGE_SIZE,
 )
-# 🔥 გასწორდა: წაიშალა scrapers. პრეფიქსი
 from common import get_session, paginate, sleep_between
 
+# GraphQL მოთხოვნა პროდუქტებისა და ფასების სტრუქტურის მისაღებად
 PSP_PRODUCTS_QUERY = """
 query products(
   $currentPage: Int = 1
@@ -55,30 +55,43 @@ def _parse_item(item: dict) -> dict | None:
     name = (item.get("name") or "").strip()
     if not name:
         return None
-    prices = item.get("price_range", {}).get("maximum_price", {})
-    final = prices.get("final_price", {}).get("value")
-    regular = prices.get("regular_price", {}).get("value")
+        
+    # უსაფრთხოდ მივყვებით ფასების იერარქიას
+    price_range = item.get("price_range", {})
+    max_price = price_range.get("maximum_price", {}) if price_range else {}
+    
+    final = max_price.get("final_price", {}).get("value")
+    regular = max_price.get("regular_price", {}).get("value")
+    
     if final is None:
         return None
+        
+    # უსაფრთხოდ ამოვაარქივოთ პროდუქტის URL მისამართი
     url_path = ""
-    rewrites = item.get("url_rewrites") or []
-    if rewrites:
+    rewrites = item.get("url_rewrites")
+    if rewrites and isinstance(rewrites, list) and len(rewrites) > 0:
         url_path = rewrites[0].get("url") or ""
+    elif isinstance(rewrites, dict):
+        url_path = rewrites.get("url") or ""
+        
     url = f"https://psp.ge/{url_path.lstrip('/')}" if url_path else PSP_CATEGORY_URL
+    
     row = {
         COL_NAME: name[:200],
         COL_PRICE: float(final),
         COL_SOURCE: "PSP",
         COL_CATEGORY: CATEGORY_LABEL,
         COL_URL: url,
-        COL_SKU: item.get("sku") or "",
+        COL_SKU: str(item.get("sku") or ""),
     }
+    
+    # ფასდაკლების (ძველი ფასის) ვალიდაცია
     if regular and float(regular) > float(final):
         row[COL_OLD_PRICE] = float(regular)
+        
     return row
 
 
-# 🔥 გასწორდა: მოიხსნა ვარსკვლავი (*), რათა app.py-დან გადმოცემული არგუმენტები სწორად წაიკითხოს
 def scrape_psp(max_pages: int, page_size: int = PSP_PAGE_SIZE) -> list[dict]:
     session = get_session()
     session.headers["Content-Type"] = "application/json"
@@ -91,6 +104,7 @@ def scrape_psp(max_pages: int, page_size: int = PSP_PAGE_SIZE) -> list[dict]:
         nonlocal total_pages
         if page > total_pages:
             return []
+            
         payload = {
             "query": PSP_PRODUCTS_QUERY,
             "variables": {
@@ -99,16 +113,22 @@ def scrape_psp(max_pages: int, page_size: int = PSP_PAGE_SIZE) -> list[dict]:
                 "filter": {"category_id": {"eq": PSP_CATEGORY_ID}},
             },
         }
+        
         resp = session.post(PSP_GRAPHQL_URL, json=payload, timeout=30)
         resp.raise_for_status()
         data = resp.json()
+        
         if data.get("errors"):
             return []
+            
         products = data.get("data", {}).get("products") or {}
+        
+        # დინამიურად ვანახლებთ გვერდების რაოდენობას
         total_pages = min(
             int(products.get("page_info", {}).get("total_pages") or 1),
             max_pages,
         )
+        
         items = products.get("items") or []
         rows = []
         for item in items:
