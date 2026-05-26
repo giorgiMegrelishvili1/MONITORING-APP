@@ -21,11 +21,14 @@ import streamlit as st
 # ── კონფიგი ─────────────────────────────────────────────────
 try:
     from config import (
-        COL_NAME, COL_PRICE, COL_OLD_PRICE, COL_DISCOUNT,
-        COL_BRAND, COL_CATEGORY, COL_SOURCE, COL_URL,
+        COL_NAME, COL_PRICE, COL_OLD_PRICE,
+        COL_CATEGORY, COL_SOURCE, COL_URL,
         COL_UPDATED, COL_NORM_KEY,
         MAX_PAGES_PSP, MAX_PAGES_AVERSI, MAX_PAGES_GPC,
     )
+    # 🔥 უსაფრთხოების დაზღვევა: ვქმნით ცვლადებს, რომლებიც config.py-ში არ გაქვთ
+    COL_DISCOUNT = "discount"
+    COL_BRAND = "brand"
 except Exception:
     st.error("config.py ჩატვირთვა ვერ მოხერხდა")
     st.code(traceback.format_exc()); st.stop()
@@ -49,7 +52,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
 st.markdown("""
 <style>
   /* კარდები */
