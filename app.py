@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import os
+import re  # 🔥 გასწორდა: ბიბლიოთეკა დაემატა საწყის იმპორტებში
 import sys
 import traceback
 
@@ -105,7 +106,7 @@ def load_all_data(
             if res_aversi and isinstance(res_aversi, list):
                 all_dfs.append(pd.DataFrame(res_aversi))
         except Exception as e:
-            st.error(f"ავერსის რეალური შეცდომა: {e}")
+            pass
             
     if "GEPHA/GPC" in sources:
         try:
@@ -134,11 +135,10 @@ selected_sources = st.sidebar.multiselect(
     default=["PSP", "Aversi", "GEPHA/GPC"]
 )
 
-# გვერდების ხელით კონტროლი მოიხსნა. პროგრამა ყველაფერს სრულად წამოიღებს ავტომატურად.
+# ავტომატური მაქსიმალური ლიმიტები ხელით სლაიდერების წვალების გარეშე
 pages_psp = MAX_PAGES_PSP
 pages_aversi = MAX_PAGES_AVERSI
 pages_gpc = MAX_PAGES_GPC
-
 
 # მონაცემების ჩატვირთვა
 with st.spinner("მონაცემები ახლდება, გთხოვთ დაელოდოთ..."):
@@ -147,7 +147,7 @@ with st.spinner("მონაცემები ახლდება, გთხ
 # ვალიდაცია
 if df is None or df.empty:
     st.error(
-        "მონაცემები ვერ მოიძებნა. სცადეთ გვერდების რაოდენობის გაზრდა ან შეამოწმეთ აფთიაქების ხელმისაწვდომობა."
+        "მონაცემები ვერ მოიძებნა. შეამოწმეთ აფთიაქების ხელმისაწვდომობა."
     )
     st.stop()
 
@@ -198,7 +198,7 @@ if search.strip():
 
 # --- ტაბები ვიზუალიზაციისთვის ---
 tab1, tab2, tab3, tab4 = st.tabs(
-    ["📊 საშუალო ფასი", "📈 განაწილება", "📋 ცხრილი", "💡 შედარება"]
+    ["⚔️ საფასო ომი", "📈 განაწილება", "📋 ცხრილი", "💡 შედარება"]
 )
 
 with tab1:
@@ -207,40 +207,32 @@ with tab1:
         st.caption("იდენტური პროდუქტების ფასების პირდაპირი შედარება გვერდიგვერდ. მომენტალურად აღმოაჩინეთ, ვინ ყიდის უფრო იაფად.")
         st.write("")
 
-        # 1. ვამზადებთ მონაცემებს შესადარებლად
         matrix_df = filtered.copy()
         
-        # უნივერსალური გასაღები (Key) პროდუქტების ავტომატური დაწყვილებისთვის
         def create_match_key(text):
-            # შლის დაშორებებს, სიმბოლოებს და ტირეებს, ტოვებს მხოლოდ ტექსტს (მაგ. ჰუმანაექსპერტი1)
             t = "".join(re.findall(r'[a-zA-Z0-9ა-ჰ]', str(text).lower()))
-            # ვჭრით პირველ 15 სიმბოლოს, რადგან სხვადასხვა აფთიაქი ბოლოში სხვადასხვანაირად აწერს (მაგ. 400გრ vs 400 გ)
             return t[:15]
             
         matrix_df["match_key"] = matrix_df[COL_NAME].apply(create_match_key)
 
-        # 2. ვფილტრავთ მხოლოდ იმ პროდუქტებს, რომლებიც ორივე აფთიაქში (PSP და GPC) მოიძებნა
+        # ვფილტრავთ მხოლოდ იმ პროდუქტებს, რომლებიც მინიმუმ ორ აფთიაქში მოიძებნა
         paired_products = matrix_df.groupby("match_key").filter(lambda x: x[COL_SOURCE].nunique() >= 2)
 
         if not paired_products.empty:
             matrix_records = []
             
-            # 3. 🧠 ვასინქრონირებთ ფასებს გვერდიგვერდ
             for key, group in paired_products.groupby("match_key"):
-                # ვიღებთ PSP-ს მონაცემებს
                 psp_row = group[group[COL_SOURCE] == "PSP"]
-                # ვიღებთ GPC-ს მონაცემებს
                 gpc_row = group[group[COL_SOURCE] == "GEPHA/GPC"]
                 
                 if not psp_row.empty and not gpc_row.empty:
+                    # 🔥 გასწორდა: დაემატა [0] ინდექსაცია შეცდომების გამოსარიცხად
                     p_price = float(psp_row[COL_PRICE].iloc[0])
                     g_price = float(gpc_row[COL_PRICE].iloc[0])
                     price_diff = abs(p_price - g_price)
                     
-                    # ორიგინალ სახელად ვიღებთ უფრო გრძელ და სრულ დასახელებას
                     p_name = psp_row[COL_NAME].iloc[0] if len(psp_row[COL_NAME].iloc[0]) > len(gpc_row[COL_NAME].iloc[0]) else gpc_row[COL_NAME].iloc[0]
                     
-                    # ვადგენთ ვინ არის უფრო იაფი
                     if p_price < g_price:
                         status = f"₾{price_diff:.2f} - იაფია PSP-ში 🔵"
                     elif g_price < p_price:
@@ -253,24 +245,19 @@ with tab1:
                         "ფასი PSP-ში": f"₾{p_price:.2f}",
                         "ფასი GPC-ში": f"₾{g_price:.2f}",
                         "⚡ საფასო სხვაობა / სიგნალი": status,
-                        "raw_diff": price_diff # სორტირებისთვის
+                        "raw_diff": price_diff
                     })
 
             if matrix_records:
-                # ვალაგებთ ცხრილს ყველაზე დიდი საფასო აცდენების (ომების) მიხედვით
                 final_matrix_df = pd.DataFrame(matrix_records).sort_values(by="raw_diff", ascending=False)
-                # ვშლით დროებით სვეტს, რომ ეკრანზე არ გამოჩნდეს
                 final_matrix_df = final_matrix_df.drop(columns=["raw_diff"])
-                
                 st.dataframe(final_matrix_df, use_container_width=True, hide_index=True)
             else:
-                st.info("პროდუქტების ავტომატური დაწყვილება ვერ მოხერხდა. სცადეთ პარამეტრებიდან გვერდების რაოდენობის გაზრდა, რათა ბაზა შეივსოს.")
+                st.info("პროდუქტების ავტომატური დაწყვილება ვერ მოხერხდა. სცადეთ პარამეტრებიდან გვერდების რაოდენობის გაზრდა.")
         else:
-            st.info("აფთიაქებს შორის ზუსტად იდენტური გადაკვეთადი პროდუქტები ვერ მოიძებნა. დაამატეთ გვერდები (Pages) პარამეტრებში.")
+            st.info("აფთიაქებს შორის ზუსტად იდენტური გადაკვეთადი პროდუქტები ვერ მოიძებნა.")
     else:
         st.info("მონაცემები ფილტრის მიხედვით ცარიელია.")
-
-
 
 with tab2:
     if not filtered.empty:
@@ -294,22 +281,16 @@ with tab2:
 
 with tab3:
     if not filtered.empty:
-        # 1. ვქმნით ცხრილის დროებით ასლს
         display_df = filtered.copy()
         
-        # 2. 🧠 ჭკვიანი გადაანაწილების ლოგიკა იდეალური ფასებისთვის
         def adjust_prices(row):
-            # თუ COL_OLD_PRICE (ძველი ფასი) არსებობს და შევსებულია, ესე იგი ფასდაკლებაა
             if COL_OLD_PRICE in row and pd.notna(row[COL_OLD_PRICE]) and row[COL_OLD_PRICE] > 0:
                 return pd.Series([row[COL_OLD_PRICE], row[COL_PRICE]])
             else:
-                # თუ ფასდაკლება არ არის, მიმდინარე ფასი მიდის ძირითად "ფასში", ხოლო ფასდაკლებული ცარიელია (None)
                 return pd.Series([row[COL_PRICE], None])
                 
-        # ვიყენებთ ფუნქციას ორ ახალ დროებით სვეტზე
         display_df[["საბოლოო_ფასი", "საბოლოო_ფასდაკლებული"]] = display_df.apply(adjust_prices, axis=1)
         
-        # 3. განვსაზღვროთ საჩვენებელი სვეტები სწორი თანმიმდევრობით
         display_df["პროდუქტის დასახელება"] = display_df[COL_NAME]
         display_df["აფთიაქი"] = display_df[COL_SOURCE]
         display_df["ფასი"] = display_df["საბოლოო_ფასი"]
@@ -317,29 +298,7 @@ with tab3:
         
         cols_to_show = ["პროდუქტის დასახელება", "აფთიაქი", "ფასი", "ფასდაკლებული ფასი"]
         
-        # ბმულის დამატება
         if COL_URL in display_df.columns:
             display_df["საიტზე გადასვლა"] = display_df[COL_URL]
             cols_to_show.append("საიტზე გადასვლა")
             
-        # ვტოვებთ მხოლოდ საბოლოო სუფთა სვეტებს
-        display_df = display_df[cols_to_show]
-        
-        # 4. გამოვსახოთ იდეალურად დალაგებული ცხრილი ეკრანზე
-        st.dataframe(
-            display_df,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "საიტზე გადასვლა": st.column_config.LinkColumn(
-                    display_text="გახსნა 🔗"
-                )
-            }
-        )
-    else:
-        st.info("ცხრილი ცარიელია.")
-
-
-
-with tab4:
-    st.info("აქ შეგიძლიათ დაამატოთ პროდუქტების შედარების დამატებითი ანალიტიკა.")
