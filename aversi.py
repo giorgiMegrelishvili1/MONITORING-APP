@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import requests
 from bs4 import BeautifulSoup
 
 from config import (
@@ -14,45 +15,37 @@ from config import (
     COL_SKU,
     COL_SOURCE,
     COL_URL,
-    HEADERS,
 )
 from common import paginate, sleep_between
 
 
 def _fetch_html(url: str) -> str:
     """
-    ავერსის ბლოკირების ასავლელი ფუნქცია Playwright-ის სწრაფი ჩატვირთვით.
-    ავტომატურად აინსტალირებს ბრაუზერს Streamlit Cloud-ზე, თუ ის არ არსებობს.
+    ავერსის ბლოკირების ასავლელი ფუნქცია Requests-ით და მოწინავე ბრაუზერის Headers-ით.
     """
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError as exc:
-        raise RuntimeError(
-            "Playwright არ არის დაინსტალირებული requirements.txt-ში."
-        ) from exc
-
-    # 🔥 ავტომატური ბრაუზერის ინსტალაცია Streamlit Cloud-ისთვის
-    try:
-        import os
-        import subprocess
-        # ვამოწმებთ, უკვე დაყენებულია თუ არა ბრაუზერი ქეშში
-        if not os.path.exists(os.path.expanduser("~/.cache/ms-playwright")):
-            subprocess.run(["playwright", "install", "chromium"], check=True)
-    except Exception as install_err:
-        # თუ ინსტალაციისას რამე პრობლემა მოხდა, ჩუმად აგრძელებს
-        pass
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
-        
-        page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_timeout(2000) 
-        
-        html = page.content()
-        browser.close()
-    return html
-
+    session = requests.Session()
+    
+    # გაძლიერებული ბრაუზერის იმიტაცია, რომელსაც Cloudflare მარტივად ვერ ბლოკავს
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "ka-GE,ka;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "max-age=0",
+        "Connection": "keep-alive",
+        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        "Sec-Ch-Ua-Mobile": "?0",
+        "Sec-Ch-Ua-Platform": '"Windows"',
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1",
+        "Upgrade-Insecure-Requests": "1"
+    })
+    
+    resp = session.get(url, timeout=30)
+    resp.raise_for_status()
+    return resp.text
 
 
 def _page_url(page: int) -> str:
@@ -118,16 +111,20 @@ def _detect_last_page(html: str) -> int:
 
 
 def scrape_aversi(max_pages: int) -> list[dict]:
-    first_html = _fetch_html(AVERSI_LIST_URL)
-    last = min(_detect_last_page(first_html), max_pages)
+    try:
+        first_html = _fetch_html(AVERSI_LIST_URL)
+        last = min(_detect_last_page(first_html), max_pages)
 
-    def fetch_page(page: int) -> list[dict]:
-        if page > last:
-            return []
-        url = _page_url(page)
-        html = first_html if page == 1 else _fetch_html(url)
-        return _parse_html(html)
+        def fetch_page(page: int) -> list[dict]:
+            if page > last:
+                return []
+            url = _page_url(page)
+            html = first_html if page == 1 else _fetch_html(url)
+            return _parse_html(html)
 
-    rows = paginate(fetch_page, max_pages=last, stop_on_empty=True)
-    sleep_between()
-    return rows
+        rows = paginate(fetch_page, max_pages=last, stop_on_empty=True)
+        sleep_between()
+        return rows
+    except Exception:
+        # თუ მაინც დაიბლოკა, აბრუნებს ცარიელ სიას, რომ მთლიანი საიტი არ გაითიშოს
+        return []
