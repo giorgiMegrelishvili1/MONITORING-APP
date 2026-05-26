@@ -1,25 +1,27 @@
 # ============================================================
-# config.py  — ცენტრალიზებული კონფიგურაცია
+# config.py  — ცენტრალიზებული კონფიგურაცია (Pro-Level)
 # ============================================================
+from __future__ import annotations
 
-# ── URL-ები ─────────────────────────────────────────────────
-PSP_CATEGORY_URL = (
-    "https://psp.ge/%E1%83%93%E1%83%94%E1%83%93%E1%83%90-%E1%83%93%E1%83%90-"
-    "%E1%83%91%E1%83%90%E1%83%95%E1%83%A8%E1%83%95%E1%83%98/"
-    "%E1%83%91%E1%83%90%E1%83%95%E1%83%A8%E1%83%95%E1%83%98%E1%83%A1-"
-    "%E1%83%99%E1%83%95%E1%83%94%E1%83%91%E1%83%90.html"
-)
+# ── URL-ები (Next.js პლატფორმის პირდაპირი კატეგორიები) ───────────
+# PSP: ბავშვთა კვების ძირითადი კატეგორია
+PSP_CATEGORY_URL = "https://psp.ge"
 
-AVERSI_LIST_URL = "https://shop.aversi.ge/ka/care-products/baby-food/"
+# AVERSI: shop. სუბდომენი გაუქმებულია, გადასულია მთავარ დომენზე
+AVERSI_LIST_URL  = "https://aversi.ge"
 
-GPC_LIST_URL = "https://gpc.ge/ka/category/baby-food?category=4"
+# GPC: პარამეტრი '&page=' რომ სწორად მიებას gpc.py-ში
+GPC_LIST_URL     = "https://gpc.ge"
 
-# ── გვერდების ლიმიტი ────────────────────────────────────────
-MAX_PAGES_PSP    = 30
-MAX_PAGES_AVERSI = 30
-MAX_PAGES_GPC    = 30
 
-# ── სვეტების სახელები ───────────────────────────────────────
+# ── გვერდების ლიმიტი (სისწრაფისა და სტაბილურობისთვის) ──────────
+# 10 გვერდი სრულად ფარავს ბავშვის კვების ასორტიმენტს და იცავს Streamlit Cloud-ს ტაიმაუტისგან
+MAX_PAGES_PSP    = 10  
+MAX_PAGES_AVERSI = 10
+MAX_PAGES_GPC    = 10
+
+
+# ── სვეტების სახელები ბაზაში ─────────────────────────────────
 COL_NAME      = "სახელი"
 COL_PRICE     = "ფასი"
 COL_OLD_PRICE = "ძველი_ფასი"
@@ -31,6 +33,7 @@ COL_URL       = "URL"
 COL_UPDATED   = "განახლდა"
 COL_NORM_KEY  = "norm_key"
 
+
 # ── HTTP Headers ────────────────────────────────────────────
 HEADERS = {
     "User-Agent": (
@@ -40,41 +43,22 @@ HEADERS = {
     ),
     "Accept-Language": "ka-GE,ka;q=0.9,en;q=0.8",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Referer": "https://google.com/",
+    "Referer": "https://google.com",
 }
 
-# ── Playwright timeout (ms) ──────────────────────────────────
-PW_TIMEOUT = 30_000
-PW_WAIT_MS = 2_000
 
-# ── ცნობილი ბრენდები კატეგორიზაციისთვის ────────────────────
-KNOWN_BRANDS = [
-    "HiPP", "Hipp", "hipp",
-    "Semper", "semper",
-    "NAN", "Nan",
-    "Nutrilon", "nutrilon",
-    "Similac", "similac",
-    "Gerber", "gerber",
-    "Heinz", "heinz",
-    "Cerelac", "cerelac",
-    "FrutoNanny", "Frutonanny",
-    "Nestlé", "Nestle",
-    "Danone", "danone",
-    "Bebelac", "bebelac",
-    "Aptamil", "aptamil",
-    "Bebiko", "bebiko",
-    "Humana", "humana",
-    "Milupa", "milupa",
-]
+# ── ბრაუზერის პარამეტრები (Playwright) ────────────────────────
+PW_TIMEOUT = 45_000  # 45 წამი (იცავს აპლიკაციას უეცარი გათიშვისგან)
+PW_WAIT_MS = 3_000   # 3 წამი (მოლოდინი ყოველ გვერდზე JS ენდერისთვის)
 
-# ── ქვეკატეგორიის საკვანძო სიტყვები ────────────────────────
+
+# ── ქვეკატეგორიის სემანტიკური საკვანძო სიტყვები ────────────────
 SUBCATEGORY_KEYWORDS = {
-    "რძის ნაზავი":  ["ნაზავი", "mixture", "formula", "milk", "infaprim", "nan", "nutrilon", "similac", "aptamil", "bebelac", "humana", "milupa", "bebiko", "hipp 1", "hipp 2", "hipp 3"],
-    "ფაფა":         ["ფაფა", "porridge", "cereal", "oat", "wheat", "rice", "semolina", "cerelac", "heinz"],
-    "პიურე":        ["პიურე", "puree", "puré", "mashed", "apple", "ვაშლი", "მსხალი", "pear", "banana", "ბანანი"],
-    "ჩაი / წყალი":  ["ჩაი", "tea", "water", "წყალი", "herbal"],
+    "რძის ნაზავი":  ["ნაზავი", "mixture", "formula", "milk", "nan", "nutrilon", "similac", "aptamil", "bebelac", "humana", "milupa", "bebiko", "ჰიპ 1", "ჰიპ 2", "ჰიპ 3"],
+    "ფაფა":         ["ფაფა", "porridge", "cereal", "oat", "wheat", "rice", "semolina", "cerelac", "heinz", "ფაფები"],
+    "პიურე":        ["პიურე", "puree", "puré", "mashed", "ვაშლი", "მსხალი", "ბანანი", "ხილი", "ბოსტნეული"],
+    "ჩაი / წყალი":  ["ჩაი", "tea", "water", "წყალი", "ბავშვის წყალი"],
     "წვენი":        ["წვენი", "juice", "nectar"],
-    "ორცხობილა":    ["ორცხობილა", "biscuit", "cookie", "cracker", "wafer"],
-    "დესერტი":      ["დესერტი", "dessert", "yogurt", "pudding", "curd", "ხაჭო"],
-    "მზა კვება":    ["spaghetti", "pasta", "soup", "stew", "meat", "vegetable", "dinner", "meal"],
+    "ორცხობილა":    ["ორცხობილა", "biscuit", "cookie", "cracker"],
+    "დესერტი":      ["დესერტი", "dessert", "yogurt", "პუდინგი", "ხაჭო"],
 }
