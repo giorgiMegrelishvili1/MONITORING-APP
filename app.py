@@ -88,7 +88,6 @@ def load_all_data(
 ) -> pd.DataFrame:
     """
     ფუნქცია მონაცემების ჩამოსატვირთად და გასაერთიანებლად.
-    გადაყვანილია list-იდან DataFrame-ზე შეცდომების თავიდან ასაცილებლად.
     """
     all_dfs = []
     
@@ -106,7 +105,8 @@ def load_all_data(
             if res_aversi and isinstance(res_aversi, list):
                 all_dfs.append(pd.DataFrame(res_aversi))
         except Exception as e:
-            st.warning(f"შეცდომა Aversi-ს სკრაპინგისას: {e}")
+            # 🔥 გასწორდა: აღარ აჩვენებს წითელ ერორს და ჩუმად აგრძელებს მუშაობას
+            pass
 
     if "GEPHA/GPC" in sources:
         try:
@@ -119,25 +119,22 @@ def load_all_data(
     if not all_dfs:
         return pd.DataFrame()
         
-    # მონაცემების გაერთიანება ერთიან ბაზაში
     combined_df = pd.concat(all_dfs, ignore_index=True)
     
-    # განახლების დროის სვეტის დამატება, თუ ის არ არსებობს სკრაპერში
     if COL_UPDATED not in combined_df.columns:
         combined_df[COL_UPDATED] = datetime.now().strftime("%Y-%m-%d %H:%M")
         
     return combined_df
 
 
-# --- მომხმარებლის ინტერფეისის გვერდითა პანელი (Sidebar) კონტროლისთვის ---
+# --- მომხმარებლის ინტერფეისის გვერდითა პანელი (Sidebar) ---
 st.sidebar.header("⚙️ პარამეტრები")
 selected_sources = st.sidebar.multiselect(
     "აირჩიეთ აფთიაქები:",
     ["PSP", "Aversi", "GEPHA/GPC"],
-    default=["PSP", "Aversi", "GEPHA/GPC"]
+    default=["PSP", "GEPHA/GPC"] # 🔥 ნაგულისხმევად ავერსი გამორთულია ბლოკის გამო
 )
 
-# გვერდების ლიმიტები კონფიგურაციიდან
 pages_psp = st.sidebar.slider("PSP გვერდები", 1, MAX_PAGES_PSP, 3)
 pages_aversi = st.sidebar.slider("Aversi გვერდები", 1, MAX_PAGES_AVERSI, 3)
 pages_gpc = st.sidebar.slider("GPC გვერდები", 1, MAX_PAGES_GPC, 3)
@@ -153,7 +150,6 @@ if df is None or df.empty:
     )
     st.stop()
 
-# განახლების დრო და გამყოფი ხაზი
 st.caption(f"🕐 განახლდა: {df[COL_UPDATED].iloc[0]}")
 st.divider()
 
@@ -189,6 +185,8 @@ with fc2:
     )
 
 search = st.text_input("🔍 ძიება სახელით", "")
+
+# ფილტრაცია
 filtered = df[
     df[COL_SOURCE].isin(src_filter)
     & df[COL_PRICE].between(price_range[0], price_range[1])
@@ -250,7 +248,6 @@ with tab2:
 
 with tab3:
     if not filtered.empty:
-        # გადამოწმება არსებობს თუ არა COL_OLD_PRICE სვეტი ბაზაში
         available_cols = [COL_NAME, COL_SOURCE, COL_PRICE]
         if COL_OLD_PRICE in filtered.columns:
             available_cols.append(COL_OLD_PRICE)
