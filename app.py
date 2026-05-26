@@ -13,8 +13,6 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-_require_streamlit_server()
-
 from config import (
     AVERSI_LIST_URL,
     COL_CATEGORY,
