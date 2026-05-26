@@ -105,7 +105,6 @@ def load_all_data(
             if res_aversi and isinstance(res_aversi, list):
                 all_dfs.append(pd.DataFrame(res_aversi))
         except Exception as e:
-            # 🔍 გამოვაჩინოთ რეალური შეცდომა დიაგნოსტიკისთვის
             st.error(f"ავერსის რეალური შეცდომა: {e}")
             
     if "GEPHA/GPC" in sources:
@@ -132,7 +131,7 @@ st.sidebar.header("⚙️ პარამეტრები")
 selected_sources = st.sidebar.multiselect(
     "აირჩიეთ აფთიაქები:",
     ["PSP", "Aversi", "GEPHA/GPC"],
-    default=["PSP", "GEPHA/GPC"] # 🔥 ნაგულისხმევად ავერსი გამორთულია ბლოკის გამო
+    default=["PSP", "Aversi", "GEPHA/GPC"]
 )
 
 pages_psp = st.sidebar.slider("PSP გვერდები", 1, MAX_PAGES_PSP, 3)
