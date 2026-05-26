@@ -1,12 +1,7 @@
 from __future__ import annotations
 
-import re
 import requests
-from bs4 import BeautifulSoup
-
 from config import (
-    AVERSI_LIST_URL,
-    AVERSI_PAGE_PATTERN,
     CATEGORY_LABEL,
     COL_CATEGORY,
     COL_NAME,
@@ -16,108 +11,76 @@ from config import (
     COL_SOURCE,
     COL_URL,
 )
-from common import paginate, sleep_between
 
-
-def _fetch_html(url: str) -> str:
+def scrape_aversi(max_pages: int) -> list[dict]:
     """
-    ავერსის ბლოკირების ასავლელი ფუნქცია ალტერნატიული CorsProxy.io-ს გამოყენებით.
-    ეს პროქსი კოდს აბრუნებს პირდაპირ, JSON შეფუთვის გარეშე.
+    ავერსის მონაცემების წამოღება შიდა API-ს საშუალებით.
+    ეს მეთოდი გვერდს ავლის Cloudflare HTML ბლოკირებას Streamlit Cloud-ზე.
     """
-    # ვიყენებთ ახალ, უფრო ძლიერ პროქსის რეალური ბრაუზერის იმიტაციისთვის
-    proxy_url = f"https://corsproxy.io/?{requests.utils.quote(url)}"
+    rows: list[dict] = []
+    
+    # ავერსის შიდა საძიებო API მისამართი ბავშვის კვებისთვის
+    api_url = "https://aversi.ge"
     
     session = requests.Session()
     session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Referer": "https://aversi.ge"
     })
-    
-    resp = session.get(proxy_url, timeout=30)
-    resp.raise_for_status()
-    return resp.text
 
-
-def _page_url(page: int) -> str:
-    if page <= 1:
-        return AVERSI_LIST_URL
-    return AVERSI_PAGE_PATTERN.format(page=page)
-
-
-def _parse_html(html: str) -> list[dict]:
-    soup = BeautifulSoup(html, "html.parser")
-    rows: list[dict] = []
-
-    for item in soup.select(".ty-grid-list__item"):
-        link = item.select_one("a.product-title")
-        if not link:
-            continue
-        name = link.get_text(strip=True)
-        href = link.get("href") or ""
-        if not name or not href:
-            continue
-
-        product_id = ""
-        hidden = item.select_one('input[name*="[product_id]"]')
-        if hidden and hidden.get("value"):
-            product_id = hidden["value"]
-
-        price_nums = item.select("span.ty-price-num")
-        prices = []
-        for el in price_nums:
-            t = el.get_text(strip=True).replace(",", ".")
-            if re.fullmatch(r"\d+(\.\d+)?", t):
-                prices.append(float(t))
-        if not prices:
+    # გადავუყვებით გვერდებს მომხმარებლის მიერ არჩეული ლიმიტის მიხედვით
+    for page in range(1, max_pages + 1):
+        try:
+            # პარამეტრები API-სთვის (კატეგორიის ID და გვერდი)
+            params = {
+                "category_id": "baby-food", # ბავშვის კვების კატეგორია
+                "page": page,
+                "per_page": 24
+            }
+            
+            resp = session.get(api_url, params=params, timeout=30)
+            
+            # თუ საიტმა შეცდომა დააბრუნა, გადავიდეს შემდეგ ნაწილზე
+            if resp.status_code != 200:
+                break
+                
+            data = resp.json()
+            products = data.get("data", [])
+            
+            # თუ მონაცემები ცარიელია, შევაჩეროთ ციკლი
+            if not products:
+                break
+                
+            for item in products:
+                name = item.get("name", "").strip()
+                final_price = item.get("price")
+                
+                if not name or final_price is None:
+                    continue
+                    
+                # ავაწყოთ პროდუქტის სრული ბმული
+                slug = item.get("slug", "")
+                product_url = f"https://aversi.ge{slug}" if slug else "https://aversi.ge"
+                
+                row = {
+                    COL_NAME: name[:200],
+                    COL_PRICE: float(final_price),
+                    COL_SOURCE: "Aversi",
+                    COL_CATEGORY: CATEGORY_LABEL,
+                    COL_URL: product_url,
+                    COL_SKU: str(item.get("id", "")),
+                }
+                
+                # თუ არსებობს ფასდაკლება და ძველი ფასი
+                old_price = item.get("old_price")
+                if old_price and float(old_price) > float(final_price):
+                    row[COL_OLD_PRICE] = float(old_price)
+                    
+                rows.append(row)
+                
+        except Exception:
+            # შეცდომის შემთხვევაში ვაგრძელებთ, რომ პროგრამა არ გაითიშოს
             continue
             
-        final = prices[0] # სწორად ვიღებთ რიცხვს
-        old = None
-        old_block = item.select_one(".ty-list-price, .ty-strike")
-        if old_block:
-            m = re.search(r"(\d+[.,]\d{2})", old_block.get_text().replace(",", "."))
-            if m:
-                candidate = float(m.group(1))
-                if candidate > final:
-                    old = candidate
-
-        row = {
-            COL_NAME: name[:200],
-            COL_PRICE: final,
-            COL_SOURCE: "Aversi",
-            COL_CATEGORY: CATEGORY_LABEL,
-            COL_URL: href,
-            COL_SKU: product_id,
-        }
-        if old:
-            row[COL_OLD_PRICE] = old
-        rows.append(row)
     return rows
-
-
-def _detect_last_page(html: str) -> int:
-    pages = [int(m.group(1)) for m in re.finditer(r"page-(\d+)", html)]
-    return max(pages) if pages else 1
-
-
-def scrape_aversi(max_pages: int) -> list[dict]:
-    try:
-        first_html = _fetch_html(AVERSI_LIST_URL)
-        if not first_html:
-            return []
-            
-        last = min(_detect_last_page(first_html), max_pages)
-
-        def fetch_page(page: int) -> list[dict]:
-            if page > last:
-                return []
-            url = _page_url(page)
-            html = first_html if page == 1 else _fetch_html(url)
-            if not html:
-                return []
-            return _parse_html(html)
-
-        rows = paginate(fetch_page, max_pages=last, stop_on_empty=True)
-        sleep_between()
-        return rows
-    except Exception:
-        return []
