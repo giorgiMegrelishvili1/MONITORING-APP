@@ -1,142 +1,137 @@
+# ============================================================
+# psp.py  — PSP სქრეიფერი (Playwright headless Chromium)
+# PSP — Magento-based, JS-rendered
+# ============================================================
 from __future__ import annotations
 
-import requests
+import time
+import random
+from bs4 import BeautifulSoup
+from datetime import datetime
 
 from config import (
-    CATEGORY_LABEL,
-    COL_CATEGORY,
-    COL_NAME,
-    COL_OLD_PRICE,
-    COL_PRICE,
-    COL_SKU,
-    COL_SOURCE,
-    COL_URL,
-    PSP_CATEGORY_ID,
-    PSP_CATEGORY_URL,
-    PSP_GRAPHQL_URL,
-    PSP_PAGE_SIZE,
+    PSP_CATEGORY_URL, MAX_PAGES_PSP, PW_TIMEOUT, PW_WAIT_MS,
+    COL_NAME, COL_PRICE, COL_OLD_PRICE, COL_DISCOUNT,
+    COL_BRAND, COL_CATEGORY, COL_SOURCE, COL_URL, COL_UPDATED, COL_NORM_KEY,
 )
-from common import get_session, paginate, sleep_between
-
-# GraphQL მოთხოვნა პროდუქტებისა და ფასების სტრუქტურის მისაღებად
-PSP_PRODUCTS_QUERY = """
-query products(
-  $currentPage: Int = 1
-  $pageSize: Int = 20
-  $filter: ProductAttributeFilterInput
-) {
-  products(
-    currentPage: $currentPage
-    pageSize: $pageSize
-    filter: $filter
-  ) {
-    total_count
-    page_info {
-      current_page
-      total_pages
-    }
-    items {
-      sku
-      name
-      url_rewrites { url }
-      price_range {
-        maximum_price {
-          final_price { value }
-          regular_price { value }
-        }
-      }
-    }
-  }
-}
-"""
+from common import parse_price, normalize_key, extract_brand, classify_subcategory, calc_discount_pct
 
 
-def _parse_item(item: dict) -> dict | None:
-    name = (item.get("name") or "").strip()
-    if not name:
-        return None
-        
-    # უსაფრთხოდ მივყვებით ფასების იერარქიას
-    price_range = item.get("price_range", {})
-    max_price = price_range.get("maximum_price", {}) if price_range else {}
-    
-    final = max_price.get("final_price", {}).get("value")
-    regular = max_price.get("regular_price", {}).get("value")
-    
-    if final is None:
-        return None
-        
-    # უსაფრთხოდ ამოვაარქივოთ პროდუქტის URL მისამართი
-    url_path = ""
-    rewrites = item.get("url_rewrites")
-    if rewrites and isinstance(rewrites, list) and len(rewrites) > 0:
-        url_path = rewrites[0].get("url") or ""
-    elif isinstance(rewrites, dict):
-        url_path = rewrites.get("url") or ""
-        
-    url = f"https://psp.ge/{url_path.lstrip('/')}" if url_path else PSP_CATEGORY_URL
-    
-    row = {
-        COL_NAME: name[:200],
-        COL_PRICE: float(final),
-        COL_SOURCE: "PSP",
-        COL_CATEGORY: CATEGORY_LABEL,
-        COL_URL: url,
-        COL_SKU: str(item.get("sku") or ""),
-    }
-    
-    # ფასდაკლების (ძველი ფასის) ვალიდაცია
-    if regular and float(regular) > float(final):
-        row[COL_OLD_PRICE] = float(regular)
-        
-    return row
+def _parse_psp_soup(soup: BeautifulSoup, page_url: str) -> list[dict]:
+    records = []
 
+    # Magento product item selectors
+    cards = (
+        soup.select("li.product-item") or
+        soup.select("div.product-item-info") or
+        soup.select("li[class*='item product']") or
+        soup.select("div[class*='product-card']")
+    )
 
-def scrape_psp(max_pages: int, page_size: int = PSP_PAGE_SIZE) -> list[dict]:
-    session = get_session()
-    session.headers["Content-Type"] = "application/json"
-    session.headers["Origin"] = "https://psp.ge"
-    session.headers["Referer"] = PSP_CATEGORY_URL
-
-    total_pages = 1
-
-    def fetch_page(page: int) -> list[dict]:
-        nonlocal total_pages
-        if page > total_pages:
-            return []
-            
-        payload = {
-            "query": PSP_PRODUCTS_QUERY,
-            "variables": {
-                "currentPage": page,
-                "pageSize": page_size,
-                "filter": {"category_id": {"eq": PSP_CATEGORY_ID}},
-            },
-        }
-        
-        resp = session.post(PSP_GRAPHQL_URL, json=payload, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-        
-        if data.get("errors"):
-            return []
-            
-        products = data.get("data", {}).get("products") or {}
-        
-        # დინამიურად ვანახლებთ გვერდების რაოდენობას
-        total_pages = min(
-            int(products.get("page_info", {}).get("total_pages") or 1),
-            max_pages,
+    for card in cards:
+        # ── სახელი ──────────────────────────────────────────
+        name_el = (
+            card.select_one("a.product-item-link") or
+            card.select_one("strong.product-item-name a") or
+            card.select_one("[class*='product-name'] a") or
+            card.select_one("h2 a") or
+            card.select_one("h3 a")
         )
-        
-        items = products.get("items") or []
-        rows = []
-        for item in items:
-            row = _parse_item(item)
-            if row:
-                rows.append(row)
-        return rows
+        if not name_el:
+            continue
+        name = name_el.get_text(" ", strip=True).strip()
+        if len(name) < 2:
+            continue
 
-    rows = paginate(fetch_page, max_pages=max_pages, stop_on_empty=True)
-    sleep_between()
-    return rows
+        href = name_el.get("href", page_url)
+
+        # ── მიმდინარე ფასი ──────────────────────────────────
+        # Magento: special price → final price
+        price_el = (
+            card.select_one("[data-price-type='finalPrice'] span.price") or
+            card.select_one("span.special-price span.price") or
+            card.select_one("[class*='price-wrapper'] span.price") or
+            card.select_one("span.price")
+        )
+        price = parse_price(price_el.get_text(" ", strip=True)) if price_el else None
+        if price is None:
+            continue
+
+        # ── ძველი / რეგულარული ფასი ─────────────────────────
+        old_el = (
+            card.select_one("[data-price-type='regularPrice'] span.price") or
+            card.select_one("span.old-price span.price") or
+            card.select_one("del") or
+            card.select_one("s")
+        )
+        old_price = parse_price(old_el.get_text(" ", strip=True)) if old_el else None
+        if old_price and old_price <= price:
+            old_price = None   # არ ჩაინიშნოს თუ ძველი <= ახალს
+
+        brand    = extract_brand(name)
+        subcat   = classify_subcategory(name)
+        disc_pct = calc_discount_pct(old_price, price)
+
+        records.append({
+            COL_NAME:      name[:100],
+            COL_PRICE:     price,
+            COL_OLD_PRICE: old_price,
+            COL_DISCOUNT:  disc_pct,
+            COL_BRAND:     brand,
+            COL_CATEGORY:  subcat,
+            COL_SOURCE:    "PSP",
+            COL_URL:       href,
+            COL_NORM_KEY:  normalize_key(name),
+            COL_UPDATED:   datetime.now().strftime("%Y-%m-%d %H:%M"),
+        })
+
+    return records
+
+
+def scrape_psp(max_pages: int = MAX_PAGES_PSP) -> list[dict]:
+    """
+    PSP — Playwright headless Chromium სქრეიფი.
+    Pagination: ?p=2, ?p=3 ...
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return []
+
+    results: list[dict] = []
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+        context = browser.new_context(
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
+            ),
+            viewport={"width": 1366, "height": 768},
+            locale="ka-GE",
+        )
+        page = context.new_page()
+        # სურათების ჩართვის გამორთვა — სიჩქარისთვის
+        page.route("**/*.{png,jpg,jpeg,gif,svg,webp,woff,woff2}", lambda r: r.abort())
+
+        for pg in range(1, max_pages + 1):
+            url = PSP_CATEGORY_URL if pg == 1 else f"{PSP_CATEGORY_URL}?p={pg}"
+            try:
+                page.goto(url, wait_until="networkidle", timeout=PW_TIMEOUT)
+                page.wait_for_timeout(PW_WAIT_MS)
+            except Exception:
+                break
+
+            soup = BeautifulSoup(page.content(), "lxml")
+            page_records = _parse_psp_soup(soup, url)
+
+            if not page_records:
+                break
+
+            results.extend(page_records)
+            time.sleep(random.uniform(0.5, 1.0))
+
+        browser.close()
+
+    return results
