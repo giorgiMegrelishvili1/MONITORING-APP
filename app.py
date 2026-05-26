@@ -8,6 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 import os
 import sys
+import traceback
 
 # აიძულებს Python-ს დაინახოს მიმდინარე საქაღალდე იმპორტებისთვის
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,21 +20,26 @@ import plotly.express as px
 import streamlit as st
 
 # კონფიგურაციის იმპორტი მიმდინარე საქაღალდიდან
-from config import (
-    AVERSI_LIST_URL,
-    COL_CATEGORY,
-    COL_NAME,
-    COL_OLD_PRICE,
-    COL_PRICE,
-    COL_SOURCE,
-    COL_UPDATED,
-    COL_URL,
-    GPC_LIST_URL,
-    MAX_PAGES_AVERSI,
-    MAX_PAGES_GPC,
-    MAX_PAGES_PSP,
-    PSP_CATEGORY_URL,
-)
+try:
+    from config import (
+        AVERSI_LIST_URL,
+        COL_CATEGORY,
+        COL_NAME,
+        COL_OLD_PRICE,
+        COL_PRICE,
+        COL_SOURCE,
+        COL_UPDATED,
+        COL_URL,
+        GPC_LIST_URL,
+        MAX_PAGES_AVERSI,
+        MAX_PAGES_GPC,
+        MAX_PAGES_PSP,
+        PSP_CATEGORY_URL,
+    )
+except Exception as config_err:
+    st.error("შეცდომა config.py ფაილის ჩატვირთვისას!")
+    st.code(traceback.format_exc())
+    st.stop()
 
 # გვერდის კონფიგურაცია
 st.set_page_config(
@@ -68,14 +74,9 @@ try:
     from psp import scrape_psp
     from common import normalize_key
 except Exception as _import_err:
-    st.error("პროგრამის ფაილები ვერ ჩაიტვირთა (config/scrapers ფაილები არასწორ ადგილასაა).")
-    st.code(str(_import_err))
-    st.info(
-        "გადაწყვეტა:\n"
-        "1. დარწმუნდით, რომ aversi.py, gpc.py, psp.py და common.py დევს app.py-ს გვერდით.\n"
-        "2. გახსენით ტერმინალი პროექტის საქაღალდეში.\n"
-        "3. გაუშვით ბრძანება: streamlit run app.py"
-    )
+    st.error("პროგრამის ფაილები ვერ ჩაიტვირთა (შიდა იმპორტის შეცდომა).")
+    st.info("იხილეთ რეალური შეცდომის დეტალები ქვემოთ, რათა გაიგოთ რომელი ფაილია შესაცვლელი:")
+    st.code(traceback.format_exc())  # აჩვენებს ზუსტ ფაილს და ხაზს, სადაც შეცდომაა
     st.stop()
 
 
@@ -140,7 +141,7 @@ with st.spinner("მონაცემები ახლდება, გთხ
 # ვალიდაცია
 if df is None or getattr(df, "empty", True):
     st.error(
-        "მონაცემი ვერ მოიძებნა. სცადეთ მხოლოდ **PSP** (2–3 გვერდი) ან გაზარდეთ გვერდების რაოდენობა."
+        "მონაცები ვერ მოიძებნა. სცადეთ მხოლოდ **PSP** (2–3 გვერდი) ან გაზარდეთ გვერდების რაოდენობა."
     )
     st.stop()
 
@@ -170,6 +171,7 @@ with fc1:
         sorted(df[COL_SOURCE].unique()),
         default=sorted(df[COL_SOURCE].unique()),
     )
+
 with fc2:
     price_range = st.slider(
         "ფასის დიაპაზონი (₾)",
@@ -250,4 +252,3 @@ with tab3:
 
 with tab4:
     st.info("აქ შეგიძლიათ დაამატოთ პროდუქტების შედარების დამატებითი ანალიტიკა.")
-    
