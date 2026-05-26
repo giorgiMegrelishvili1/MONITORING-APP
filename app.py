@@ -203,29 +203,72 @@ tab1, tab2, tab3, tab4 = st.tabs(
 
 with tab1:
     if not filtered.empty:
-        avg = (
-            filtered.groupby([COL_SOURCE])[COL_PRICE]
-            .agg(["mean", "median", "count"])
-            .reset_index()
-        )
-        avg.columns = [COL_SOURCE, "საშუალო", "მედიანა", "რაოდენობა"]
-        fig = px.bar(
-            avg,
-            x=COL_SOURCE,
-            y="საშუალო",
-            color=COL_SOURCE,
-            text_auto=".2f",
-            title="საშუალო ფასი წყაროს მიხედვით (ბავშვის კვება)",
-            color_discrete_map={
-                "PSP": "#1565c0",
-                "Aversi": "#2e7d32",
-                "GEPHA/GPC": "#e65100",
-            },
-        )
-        fig.update_layout(plot_bgcolor="white", paper_bgcolor="white", height=420)
-        st.plotly_chart(fig, use_container_width=True)
+        # 1. 🧠 ვქმნით ბრენდების ამოცნობის ფუნქციას პროდუქტის სახელიდან
+        def detect_brand(name):
+            name_upper = str(name).upper()
+            if "HUMANA" in name_upper or "ჰუმანა" in name_upper:
+                return "Humana"
+            elif "HIPP" in name_upper or "ჰიპი" in name_upper:
+                return "Hipp"
+            elif "NESTLE" in name_upper or "ნესტლე" in name_upper or "NAN" in name_upper or "ნან" in name_upper:
+                return "Nestle"
+            elif "SEMPER" in name_upper or "სემპერი" in name_upper:
+                return "Semper"
+            elif "NUTRILON" in name_upper or "ნუტრილონი" in name_upper:
+                return "Nutrilon"
+            elif "PLASMON" in name_upper or "პლასმონი" in name_upper:
+                return "Plasmon"
+            elif "MATERNA" in name_upper or "მატერნა" in name_upper:
+                return "Materna"
+            elif "FRISO" in name_upper or "ფრისო" in name_upper:
+                return "Friso"
+            else:
+                return "სხვა ბრენდები"
+
+        # ვამატებთ დროებით სვეტს ბრენდისთვის
+        brand_df = filtered.copy()
+        brand_df["ბრენდი"] = brand_df[COL_NAME].apply(detect_brand)
+        
+        # ვფილტრავთ, რომ "სხვა ბრენდებმა" გრაფიკი არ გადატვირთოს
+        brand_df = brand_df[brand_df["ბრენდი"] != "სხვა ბრენდები"]
+
+        if not brand_df.empty:
+            # 2. 📊 ვთვლით საშუალო ფასს აფთიაქისა და ბრენდის მიხედვით
+            avg_brand = (
+                brand_df.groupby(["ბრენდი", COL_SOURCE])[COL_PRICE]
+                .mean()
+                .reset_index()
+            )
+            avg_brand.columns = ["ბრენდი", "აფთიაქი", "საშუალო ფასი (₾)"]
+
+            # 3. ვხატავთ ბევრად უფრო ინფორმაციულ ჯგუფურ გრაფიკს
+            fig_brand = px.bar(
+                avg_brand,
+                x="ბრენდი",
+                y="საშუალო ფასი (₾)",
+                color="აფთიაქი",
+                barmode="group",  # სვეტებს სვამს გვერდიგვერდ შესადარებლად
+                text_auto=".2f",
+                title="საშუალო ფასების შედარება წამყვანი ბრენდების მიხედვით",
+                color_discrete_map={
+                    "PSP": "#1565c0",
+                    "Aversi": "#2e7d32",
+                    "GEPHA/GPC": "#e65100",
+                },
+            )
+            fig_brand.update_layout(
+                plot_bgcolor="white", 
+                paper_bgcolor="white", 
+                height=450,
+                xaxis_title="ბავშვის კვების ბრენდები",
+                yaxis_title="საშუალო ფასი (ლარი)"
+            )
+            st.plotly_chart(fig_brand, use_container_width=True)
+        else:
+            st.info("ცნობილი ბრენდების მონაცემები ფილტრში არ მოიძებნა.")
     else:
         st.info("მონაცემები ფილტრის მიხედვით ცარიელია.")
+
 
 with tab2:
     if not filtered.empty:
