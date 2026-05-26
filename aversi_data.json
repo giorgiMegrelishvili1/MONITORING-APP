@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+import os
+import json
+import requests
+from config import (
+    CATEGORY_LABEL,
+    COL_CATEGORY,
+    COL_NAME,
+    COL_OLD_PRICE,
+    COL_PRICE,
+    COL_SKU,
+    COL_SOURCE,
+    COL_URL,
+)
+
+def scrape_aversi(max_pages: int) -> list[dict]:
+    rows: list[dict] = []
+    api_url = "https://aversi.ge"
+    
+    # 1. ვცდილობთ პირდაპირ API-დან წამოღებას
+    try:
+        session = requests.Session()
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Referer": "https://aversi.ge"
+        })
+        resp = session.get(api_url, params={"category_id": "baby-food", "page": 1, "per_page": 24}, timeout=15)
+        
+        if resp.status_code == 200:
+            products = resp.json().get("data", [])
+            if products:
+                for item in products:
+                    rows.append({
+                        COL_NAME: item.get("name", "").strip()[:200],
+                        COL_PRICE: float(item.get("price", 0)),
+                        COL_SOURCE: "Aversi",
+                        COL_CATEGORY: CATEGORY_LABEL,
+                        COL_URL: f"https://aversi.ge{item.get('slug', '')}",
+                        COL_SKU: str(item.get("id", "")),
+                    })
+                return rows
+    except Exception:
+        pass
+
+    # 2. 🔥 თუ საიტმა დაბლოკა, ვკითხულობთ თქვენს მიერ DevTools-იდან შენახულ ფაილს!
+    try:
+        json_path = os.path.join(os.path.dirname(__file__), "aversi_data.json")
+        if os.path.exists(json_path):
+            with open(json_path, "r", encoding="utf-8") as f:
+                backup_data = json.load(f)
+                
+            for item in backup_data:
+                final_price = item.get("price")
+                if not final_price:
+                    continue
+                    
+                row = {
+                    COL_NAME: item.get("name", "").strip()[:200],
+                    COL_PRICE: float(final_price),
+                    COL_SOURCE: "Aversi",
+                    COL_CATEGORY: CATEGORY_LABEL,
+                    COL_URL: f"https://aversi.ge{item.get('slug', '')}",
+                    COL_SKU: str(item.get("id", "")),
+                }
+                if item.get("old_price"):
+                    row[COL_OLD_PRICE] = float(item.get("old_price"))
+                rows.append(row)
+    except Exception:
+        pass
+
+    return rows
