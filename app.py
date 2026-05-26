@@ -107,8 +107,7 @@ def load_all_data(
         except Exception as e:
             # 🔍 გამოვაჩინოთ რეალური შეცდომა დიაგნოსტიკისთვის
             st.error(f"ავერსის რეალური შეცდომა: {e}")
-
-
+            
     if "GEPHA/GPC" in sources:
         try:
             res_gpc = scrape_gpc(max_gpc)
