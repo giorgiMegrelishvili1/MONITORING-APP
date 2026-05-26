@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json  # დაგვჭირდება პროქსის პასუხის წასაკითხად
 import requests
 from bs4 import BeautifulSoup
 
@@ -21,31 +22,17 @@ from common import paginate, sleep_between
 
 def _fetch_html(url: str) -> str:
     """
-    ავერსის ბლოკირების ასავლელი ფუნქცია Requests-ით და მოწინავე ბრაუზერის Headers-ით.
+    ავერსის ბლოკირების ასავლელი ფუნქცია Allorigins უფასო პროქსი-სერვისის გამოყენებით.
     """
-    session = requests.Session()
+    # ვახვევთ ორიგინალ ლინკს პროქსის მისამართში, რათა Cloudflare-მა ვერ დაგვბლოკოს
+    proxy_url = f"https://allorigins.win{requests.utils.quote(url)}"
     
-    # გაძლიერებული ბრაუზერის იმიტაცია, რომელსაც Cloudflare მარტივად ვერ ბლოკავს
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "ka-GE,ka;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Cache-Control": "max-age=0",
-        "Connection": "keep-alive",
-        "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": '"Windows"',
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Upgrade-Insecure-Requests": "1"
-    })
-    
-    resp = session.get(url, timeout=30)
+    resp = requests.get(proxy_url, timeout=40)
     resp.raise_for_status()
-    return resp.text
+    
+    # სერვისი პასუხს აბრუნებს JSON ფორმატში, სადაც "contents" არის საიტის HTML კოდი
+    data = resp.json()
+    return data.get("contents", "")
 
 
 def _page_url(page: int) -> str:
@@ -113,6 +100,9 @@ def _detect_last_page(html: str) -> int:
 def scrape_aversi(max_pages: int) -> list[dict]:
     try:
         first_html = _fetch_html(AVERSI_LIST_URL)
+        if not first_html:
+            return []
+            
         last = min(_detect_last_page(first_html), max_pages)
 
         def fetch_page(page: int) -> list[dict]:
@@ -120,11 +110,13 @@ def scrape_aversi(max_pages: int) -> list[dict]:
                 return []
             url = _page_url(page)
             html = first_html if page == 1 else _fetch_html(url)
+            if not html:
+                return []
             return _parse_html(html)
 
         rows = paginate(fetch_page, max_pages=last, stop_on_empty=True)
         sleep_between()
         return rows
     except Exception:
-        # თუ მაინც დაიბლოკა, აბრუნებს ცარიელ სიას, რომ მთლიანი საიტი არ გაითიშოს
+        # შეცდომის შემთხვევაშიც კი არ თიშავს მთლიან საიტსს
         return []
