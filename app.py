@@ -13,35 +13,6 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-
-def _require_streamlit_server() -> None:
-    """app.py არ უნდა გაეშვას F5/debug-ით — მხოლოდ streamlit run."""
-    try:
-        from streamlit.runtime.scriptrunner_utils import get_script_run_ctx
-
-        if get_script_run_ctx() is not None:
-            return
-    except Exception:
-        pass
-    print(
-        "\n"
-        "========================================\n"
-        "  არ გაუშვათ app.py პირდაპირ (F5 / Debug)!\n"
-        "========================================\n"
-        "\n"
-        "სწორი გზა:\n"
-        "  1) ორჯერ დააწკაპუნეთ run.bat\n"
-        "     ან\n"
-        "  2) ტერმინალში:\n"
-        "     cd C:\\Users\\Agrohub\\baby-price-index\n"
-        "     .venv\\Scripts\\activate\n"
-        "     python -m streamlit run app.py\n"
-        "\n"
-        "შემდეგ ბრაუზერი: http://localhost:8501\n"
-    )
-    sys.exit(1)
-
-
 _require_streamlit_server()
 
 from config import (
