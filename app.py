@@ -247,41 +247,48 @@ with tab2:
 
 with tab3:
     if not filtered.empty:
-        # 1. ვქმნით ცხრილის დროებით ასლს, რომ ორიგინალი მონაცემები არ ავურიოთ
+        # 1. ვქმნით ცხრილის დროებით ასლს
         display_df = filtered.copy()
         
-        # 2. განვსაზღვროთ რომელი სვეტები გვინდა რომ გამოჩნდეს ცხრილში
-        # (COL_NAME = სახელი, COL_SOURCE = წყარო, COL_PRICE = ფასი)
+        # 2. განვსაზღვროთ საჩვენებელი სვეტები (ბმული COL_URL დაბრუნდა!)
         cols_to_show = [COL_NAME, COL_SOURCE, COL_PRICE]
         
-        # ვამოწმებთ, საერთოდ არსებობს თუ არა ბაზაში ძველი ფასის (ფასდაკლების) სვეტი
         if COL_OLD_PRICE in display_df.columns:
             cols_to_show.append(COL_OLD_PRICE)
+        if COL_URL in display_df.columns:
+            cols_to_show.append(COL_URL)
             
-        # 3. ვტოვებთ მხოლოდ საჭირო სვეტებს
         display_df = display_df[cols_to_show]
         
-        # 4. 🔄 სვეტების გადარქმევის ლოგიკა თქვენი მოთხოვნის მიხედვით
+        # 3. 🔄 სვეტების გადარქმევის დაზუსტებული ლოგიკა
         rename_dict = {
             COL_NAME: "პროდუქტის დასახელება",
             COL_SOURCE: "აფთიაქი",
             COL_PRICE: "ფასი"
         }
         
-        # თუ ფასდაკლების სვეტი არის, მასაც გადავარქმევთ სახელს
         if COL_OLD_PRICE in display_df.columns:
             rename_dict[COL_OLD_PRICE] = "ფასდაკლებული ფასი"
+        if COL_URL in display_df.columns:
+            rename_dict[COL_URL] = "საიტზე გადასვლა"
             
         display_df = display_df.rename(columns=rename_dict)
         
-        # 5. გამოვსახოთ ცხრილი ეკრანზე
+        # 4. გამოვსახოთ ლამაზი დაწკაპუნებადი ცხრილი
         st.dataframe(
             display_df,
             use_container_width=True,
-            hide_index=True
+            hide_index=True,
+            # ეს პარამეტრი გრძელ URL ტექსტს ლამაზ, მოკლე და დაწკაპუნებად ბმულად გადააქცევს
+            column_config={
+                "საიტზე გადასვლა": st.column_config.LinkColumn(
+                    display_text="გახსნა 🔗"
+                )
+            }
         )
     else:
         st.info("ცხრილი ცარიელია.")
+
 
 with tab4:
     st.info("აქ შეგიძლიათ დაამატოთ პროდუქტების შედარების დამატებითი ანალიტიკა.")
