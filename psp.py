@@ -16,7 +16,8 @@ from config import (
     PSP_GRAPHQL_URL,
     PSP_PAGE_SIZE,
 )
-from scrapers.common import get_session, paginate, sleep_between
+# 🔥 გასწორდა: წაიშალა scrapers. პრეფიქსი
+from common import get_session, paginate, sleep_between
 
 PSP_PRODUCTS_QUERY = """
 query products(
@@ -77,7 +78,8 @@ def _parse_item(item: dict) -> dict | None:
     return row
 
 
-def scrape_psp(*, max_pages: int, page_size: int = PSP_PAGE_SIZE) -> list[dict]:
+# 🔥 გასწორდა: მოიხსნა ვარსკვლავი (*), რათა app.py-დან გადმოცემული არგუმენტები სწორად წაიკითხოს
+def scrape_psp(max_pages: int, page_size: int = PSP_PAGE_SIZE) -> list[dict]:
     session = get_session()
     session.headers["Content-Type"] = "application/json"
     session.headers["Origin"] = "https://psp.ge"
