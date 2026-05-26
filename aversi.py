@@ -21,26 +21,30 @@ from common import paginate, sleep_between
 
 def _fetch_html(url: str) -> str:
     """
-    ავერსის ბლოკირების ასავლელი ფუნქცია Playwright-ის გამოყენებით.
+    ავერსის ბლოკირების ასავლელი ფუნქცია Playwright-ის სწრაფი ჩატვირთვით.
     """
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
         raise RuntimeError(
-            "Streamlit Cloud-ზე Playwright არ არის დაინსტალირებული. შეამოწმეთ requirements.txt ფაილი."
+            "Anaconda-ში Playwright არ არის დაინსტალირებული."
         ) from exc
 
     with sync_playwright() as p:
-        # ვუშვებთ ბრაუზერს
         browser = p.chromium.launch(headless=True)
-        # ვუწერთ რეალური მომხმარებლის იმიტაციას (User-Agent)
+        # რეალური მომხმარებლის იმიტაცია
         page = browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
         
-        # შევდივართ საიტზე და ველოდებით მის სრულად ჩატვირთვას
-        page.goto(url, wait_until="networkidle", timeout=90000)
+        # 🔥 გასწორდა: ველოდებით მხოლოდ DOM-ის ჩატვირთვას (ბევრად სწრაფია და არ ვარდება თაიმაუტი)
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        
+        # დამატებითი პატარა პაუზა, რომ პროდუქტები ნამდვილად გამოჩნდეს ეკრანზე
+        page.wait_for_timeout(2000) 
+        
         html = page.content()
         browser.close()
     return html
+
 
 
 def _page_url(page: int) -> str:
