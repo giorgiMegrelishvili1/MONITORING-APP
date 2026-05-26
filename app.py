@@ -250,27 +250,31 @@ with tab3:
         # 1. ვქმნით ცხრილის დროებით ასლს
         display_df = filtered.copy()
         
-        # 2. განვსაზღვროთ საჩვენებელი სვეტები (ბმული COL_URL დაბრუნდა!)
-        cols_to_show = [COL_NAME, COL_SOURCE, COL_PRICE]
+        # 2. განვსაზღვროთ საჩვენებელი სვეტები სწორი თანმიმდევრობით
+        # ჯერ სახელი და აფთიაქი
+        cols_to_show = [COL_NAME, COL_SOURCE]
         
+        # თუ პროდუქტს აქვს ძველი (პირვანდელი) ფასი, გამოვაჩინოთ ის წინ
         if COL_OLD_PRICE in display_df.columns:
             cols_to_show.append(COL_OLD_PRICE)
+            
+        # შემდეგ მოდის მიმდინარე აქტიური ფასი, რასაც იხდიან
+        cols_to_show.append(COL_PRICE)
+        
+        # ბოლოში კი ბმული
         if COL_URL in display_df.columns:
             cols_to_show.append(COL_URL)
             
         display_df = display_df[cols_to_show]
         
-        # 3. 🔄 სვეტების გადარქმევის დაზუსტებული ლოგიკა
+        # 3. 🔄 სვეტების გადარქმევის ლოგიკა (ადგილები შევუცვალეთ თქვენი მოთხოვნის მიხედვით!)
         rename_dict = {
             COL_NAME: "პროდუქტის დასახელება",
             COL_SOURCE: "აფთიაქი",
-            COL_PRICE: "ფასი"
+            COL_OLD_PRICE: "ფასი",              # ძველი, პირვანდელი ფასი
+            COL_PRICE: "ფასდაკლებული ფასი",    # ახალი, შეღავათიანი ფასი
+            COL_URL: "საიტზე გადასვლა"
         }
-        
-        if COL_OLD_PRICE in display_df.columns:
-            rename_dict[COL_OLD_PRICE] = "ფასდაკლებული ფასი"
-        if COL_URL in display_df.columns:
-            rename_dict[COL_URL] = "საიტზე გადასვლა"
             
         display_df = display_df.rename(columns=rename_dict)
         
@@ -279,7 +283,6 @@ with tab3:
             display_df,
             use_container_width=True,
             hide_index=True,
-            # ეს პარამეტრი გრძელ URL ტექსტს ლამაზ, მოკლე და დაწკაპუნებად ბმულად გადააქცევს
             column_config={
                 "საიტზე გადასვლა": st.column_config.LinkColumn(
                     display_text="გახსნა 🔗"
@@ -288,6 +291,7 @@ with tab3:
         )
     else:
         st.info("ცხრილი ცარიელია.")
+
 
 
 with tab4:
