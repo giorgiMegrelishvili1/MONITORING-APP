@@ -4,7 +4,25 @@
 # ============================================================
 from __future__ import annotations
 
-import os, sys, re, traceback
+import os
+import sys
+import subprocess
+
+# 🚀 Playwright ბრაუზერის ავტომატური ინსტალაცია Streamlit Cloud-ისთვის
+try:
+    # ვამოწმებთ, არის თუ არა უკვე ჩამოტვირთული ბრაუზერის ფაილები
+    if not os.path.exists("/home/appuser/.cache/ms-playwright"):
+        print("⏳ Playwright Chromium-ის ბრაუზერი ვერ მოიძებნა. იწყება ფონური ინსტალაცია...")
+        # უზრუნველყოფს სისტემური პაკეტების და ბრაუზერის სრულ გამართვას
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
+        subprocess.run([sys.executable, "-m", "playwright", "install-deps"], check=True)
+        print("✅ Playwright-ის გარემო წარმატებით გამართულია!")
+except Exception as e:
+    print(f"⚠️ Playwright-ის ინსტალაციისას დაფიქსირდა ხარვეზი: {e}")
+
+# ── ძირითადი იმპორტები და სამუშაო დირექტორია ──────────────────
+import re
+import traceback
 from datetime import datetime
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -17,6 +35,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
+
+# ============================================================
+# თქვენი კოდის გაგრძელება (ფუნქციები, სქრეიფერების იმპორტი და ა.შ.)
+# ============================================================
 
 # ── კონფიგი ─────────────────────────────────────────────────
 try:
