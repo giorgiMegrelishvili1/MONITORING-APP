@@ -45,13 +45,11 @@ def _parse_price_block(card) -> tuple[float | None, float | None]:
         except ValueError:
             pass
             
-    # თუ content ატრიბუტი არ დაგვხვდა, ფასს ვეძებთ სპეციალურ ფასის კონტეინერში (სადაც სახელი არ ურევია)
+    # თუ content ატრიბუტი არ დაგვხვდა, ფასს ვეძებთ სპეციალურ ფასის კონტეინერში
     if final is None:
-        price_container = card.select_one("[class*='price'], [class*='Price'], div:has(> span:contains('₾'))")
+        price_container = card.select_one("[class*='price'], [class*='Price']")
         if price_container:
-            # სუფთა ფასის ამოკრეფა მხოლოდ ფასის ბლოკიდან
             clean_text = price_container.get_text(" ", strip=True).replace("₾", "").strip()
-            # ვშლით პროცენტებს, თუ კონტეინერში დაგვხვდა
             clean_text = re.sub(r"-\d+(?:[.,]\d+)?%", "", clean_text)
             nums = [float(m.replace(",", ".")) for m in re.findall(r"(\d+(?:[.,]\d+)?)", clean_text)]
             if nums:
@@ -59,9 +57,9 @@ def _parse_price_block(card) -> tuple[float | None, float | None]:
                 if len(nums) >= 2 and nums[1] > nums[0]:
                     old = nums[1]
 
-    # ცალკე ვეძებთ ხაზგადასმულ ძველ ფასს, თუ ის კონტეინერის გარეთაა
+    # ცალკე ვეძებთ ხაზგადასმულ ძველ ფასს
     strike = card.select_one(".line-through, .ty-strike, [class*='line-through']")
-    if strike and old refinement is None:
+    if strike and old is None: # 🔥 გასწორდა: წაიშალა შეცდომით ჩაწერილი სიტყვა
         strike_text = strike.get_text(" ", strip=True).replace("₾", "").replace(",", ".").strip()
         m_old = re.search(r"(\d+(?:[.,]\d+)?)", strike_text)
         if m_old:
@@ -93,14 +91,13 @@ def _parse_html(html: str, page_url: str) -> list[dict]:
         if m:
             product_id = m.group(1)
 
-        # სახელის ამოღება უსაფრთხოდ (მხოლოდ ტექსტური თეგებიდან)
+        # სახელის ამოღება უსაფრთხოდ
         name = ""
         img = card.select_one("img[alt]")
         if img and img.get("alt"):
             name = img["alt"].strip()
             
         if not name:
-            # თუ სურათს არ აქვს alt, ვიღებთ ტექსტს მხოლოდ სათაურის ლინკიდან
             name = a.get_text(" ", strip=True)
             
         if not name or len(name) < 3:
