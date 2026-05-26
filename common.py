@@ -1,46 +1,87 @@
+# ============================================================
+# common.py  — საზიარო ფუნქციები
+# ============================================================
 from __future__ import annotations
 
 import re
-import time
-from typing import Callable
-
-import requests
-
-from config import HEADERS, REQUEST_DELAY_SEC
+import unicodedata
+from config import KNOWN_BRANDS, SUBCATEGORY_KEYWORDS
 
 
-def get_session() -> requests.Session:
-    s = requests.Session()
-    s.headers.update(HEADERS)
-    return s
+# ── ფასის პარსინგი ───────────────────────────────────────────
+def parse_price(text: str) -> float | None:
+    """
+    მიწოდებული სტრინგიდან ამოიღებს პირველ ვალიდურ GEL ფასს.
+    მხარს უჭერს: '24.80₾', '24,80 GEL', '24.80', '₾ 24.80'
+    """
+    if not text:
+        return None
+    cleaned = (
+        text.replace("\xa0", " ")
+            .replace(",", ".")
+            .replace(" ", "")
+            .strip()
+    )
+    # ამოვიღებთ პირველ float-ს
+    m = re.search(r"(\d{1,6}\.?\d{0,2})", cleaned)
+    if m:
+        val = float(m.group(1))
+        if 0.5 < val < 9_999:   # სანიტარული შემოწმება
+            return round(val, 2)
+    return None
 
 
-def sleep_between() -> None:
-    time.sleep(REQUEST_DELAY_SEC)
+# ── ნორმალიზებული გასაღები შედარებისთვის ──────────────────
+_NOISE = re.compile(
+    r"[\s\-_/\\.,;:!?\(\)\[\]\"'`«»""'']+", flags=re.UNICODE
+)
+_UNITS = re.compile(
+    r"\b(\d+\s*(?:გ|მლ|ლ|კგ|g|ml|l|kg|gr|pcs|ც|pack|pk))\b",
+    flags=re.IGNORECASE | re.UNICODE,
+)
 
 
-def normalize_key(name: str) -> str:
-    """მარტივი გასაღები შედარებისთვის (იგივე პროდუქტი სხვადასხვა წყაროში)."""
-    s = name.lower()
-    s = re.sub(r"\s+", " ", s)
-    s = re.sub(r"[^\w\s-ჰ]", " ", s, flags=re.UNICODE)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s[:120]
+def normalize_key(name: str, keep_volume: bool = True) -> str:
+    """
+    პროდუქტის სახელიდან ქმნის შედარებად ნორმალიზებულ გასაღებს.
+    პრინციპი: brand + numeric_volume → ერთ საიტზე იგივე SKU = ერთი key.
+    """
+    s = name.lower().strip()
+    # unicode normalization
+    s = unicodedata.normalize("NFKD", s)
+    # ამოვიღოთ ინფო ფრჩხილებიდან (ხანდახან ზედმეტია)
+    s = re.sub(r"\(.*?\)", " ", s)
+    # ნოიზი
+    s = _NOISE.sub("", s)
+    # დატოვე მხოლოდ ასო-ციფრები
+    s = re.sub(r"[^\w]", "", s, flags=re.UNICODE)
+    if not keep_volume:
+        s = _UNITS.sub("", s)
+    return s[:30]  # პირველი 30 სიმბოლო საკმარისია
 
 
-def paginate(
-    fetch_page: Callable[[int], list[dict]],
-    *,
-    max_pages: int,
-    stop_on_empty: bool = True,
-) -> list[dict]:
-    rows: list[dict] = []
-    for page in range(1, max_pages + 1):
-        batch = fetch_page(page)
-        if not batch:
-            if stop_on_empty:
-                break
-            continue
-        rows.extend(batch)
-        sleep_between()
-    return rows
+# ── ბრენდის ამოღება ─────────────────────────────────────────
+def extract_brand(name: str) -> str:
+    name_l = name.lower()
+    for brand in KNOWN_BRANDS:
+        if brand.lower() in name_l:
+            return brand.capitalize()
+    # fallback — პირველი სიტყვა
+    return name.split()[0].capitalize() if name.split() else "სხვა"
+
+
+# ── ქვეკატეგორიის განსაზღვრა ────────────────────────────────
+def classify_subcategory(name: str) -> str:
+    name_l = name.lower()
+    for subcat, keywords in SUBCATEGORY_KEYWORDS.items():
+        for kw in keywords:
+            if kw.lower() in name_l:
+                return subcat
+    return "სხვა"
+
+
+# ── ფასდაკლების % გამოთვლა ──────────────────────────────────
+def calc_discount_pct(old: float | None, new: float | None) -> float | None:
+    if old and new and old > new > 0:
+        return round((old - new) / old * 100, 1)
+    return None
