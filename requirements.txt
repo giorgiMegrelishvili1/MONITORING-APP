@@ -1,9 +1,9 @@
-# Streamlit Cloud — აუცილებელი პაკეტები (playwright აქ არ არის)
 streamlit>=1.32.0
 pandas>=2.1.0
 plotly>=5.18.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0
 matplotlib
-playwright>=1.44.0
 lxml
+playwright>=1.44.0
+playwright-headless-version
