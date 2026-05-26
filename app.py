@@ -67,7 +67,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# სკრაპერების იმპორტი პირდაპირ მიმდინარე საქაღალდიდან (scrapers პრეფიქსის გარეშე)
+# სკრაპერების იმპორტი პირდაპირ მიმდინარე საქაღალდიდან
 try:
     from aversi import scrape_aversi
     from gpc import scrape_gpc
@@ -75,8 +75,8 @@ try:
     from common import normalize_key
 except Exception as _import_err:
     st.error("პროგრამის ფაილები ვერ ჩაიტვირთა (შიდა იმპორტის შეცდომა).")
-    st.info("იხილეთ რეალური შეცდომის დეტალები ქვემოთ, რათა გაიგოთ რომელი ფაილია შესაცვლელი:")
-    st.code(traceback.format_exc())  # აჩვენებს ზუსტ ფაილს და ხაზს, სადაც შეცდომაა
+    st.info("იხილეთ რეალური შეცდომის დეტალები ქვემოთ:")
+    st.code(traceback.format_exc())
     st.stop()
 
 
@@ -88,37 +88,45 @@ def load_all_data(
 ) -> pd.DataFrame:
     """
     ფუნქცია მონაცემების ჩამოსატვირთად და გასაერთიანებლად.
+    გადაყვანილია list-იდან DataFrame-ზე შეცდომების თავიდან ასაცილებლად.
     """
     all_dfs = []
     
     if "PSP" in sources:
         try:
-            df_psp = scrape_psp(max_psp)
-            if df_psp is not None and not df_psp.empty:
-                all_dfs.append(df_psp)
+            res_psp = scrape_psp(max_psp)
+            if res_psp and isinstance(res_psp, list):
+                all_dfs.append(pd.DataFrame(res_psp))
         except Exception as e:
             st.warning(f"შეცდომა PSP-ს სკრაპინგისას: {e}")
             
     if "Aversi" in sources:
         try:
-            df_aversi = scrape_aversi(max_aversi)
-            if df_aversi is not None and not df_aversi.empty:
-                all_dfs.append(df_aversi)
+            res_aversi = scrape_aversi(max_aversi)
+            if res_aversi and isinstance(res_aversi, list):
+                all_dfs.append(pd.DataFrame(res_aversi))
         except Exception as e:
             st.warning(f"შეცდომა Aversi-ს სკრაპინგისას: {e}")
 
     if "GEPHA/GPC" in sources:
         try:
-            df_gpc = scrape_gpc(max_gpc)
-            if df_gpc is not None and not df_gpc.empty:
-                all_dfs.append(df_gpc)
+            res_gpc = scrape_gpc(max_gpc)
+            if res_gpc and isinstance(res_gpc, list):
+                all_dfs.append(pd.DataFrame(res_gpc))
         except Exception as e:
             st.warning(f"შეცდომა GPC-ს სკრაპინგისას: {e}")
         
     if not all_dfs:
         return pd.DataFrame()
         
-    return pd.concat(all_dfs, ignore_index=True)
+    # მონაცემების გაერთიანება ერთიან ბაზაში
+    combined_df = pd.concat(all_dfs, ignore_index=True)
+    
+    # განახლების დროის სვეტის დამატება, თუ ის არ არსებობს სკრაპერში
+    if COL_UPDATED not in combined_df.columns:
+        combined_df[COL_UPDATED] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+    return combined_df
 
 
 # --- მომხმარებლის ინტერფეისის გვერდითა პანელი (Sidebar) კონტროლისთვის ---
@@ -139,9 +147,9 @@ with st.spinner("მონაცემები ახლდება, გთხ
     df = load_all_data(selected_sources, pages_psp, pages_gpc, pages_aversi)
 
 # ვალიდაცია
-if df is None or getattr(df, "empty", True):
+if df is None or df.empty:
     st.error(
-        "მონაცები ვერ მოიძებნა. სცადეთ მხოლოდ **PSP** (2–3 გვერდი) ან გაზარდეთ გვერდების რაოდენობა."
+        "მონაცემები ვერ მოიძებნა. სცადეთ გვერდების რაოდენობის გაზრდა ან შეამოწმეთ აფთიაქების ხელმისაწვდომობა."
     )
     st.stop()
 
@@ -242,8 +250,17 @@ with tab2:
 
 with tab3:
     if not filtered.empty:
+        # გადამოწმება არსებობს თუ არა COL_OLD_PRICE სვეტი ბაზაში
+        available_cols = [COL_NAME, COL_SOURCE, COL_PRICE]
+        if COL_OLD_PRICE in filtered.columns:
+            available_cols.append(COL_OLD_PRICE)
+        if COL_CATEGORY in filtered.columns:
+            available_cols.append(COL_CATEGORY)
+        if COL_URL in filtered.columns:
+            available_cols.append(COL_URL)
+            
         st.dataframe(
-            filtered[[COL_NAME, COL_SOURCE, COL_PRICE, COL_OLD_PRICE, COL_CATEGORY, COL_URL]],
+            filtered[available_cols],
             use_container_width=True,
             hide_index=True
         )
