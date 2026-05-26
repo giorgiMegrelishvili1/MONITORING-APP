@@ -17,7 +17,8 @@ from config import (
     GPC_LIST_URL,
     GPC_PER_PAGE,
 )
-from scrapers.common import get_session, paginate, sleep_between
+# 🔥 გასწორდა: წაიშალა scrapers. პრეფიქსი
+from common import get_session, paginate, sleep_between
 
 GPC_BASE = "https://gpc.ge"
 
@@ -105,7 +106,8 @@ def _parse_html(html: str, page_url: str) -> list[dict]:
     return rows
 
 
-def scrape_gpc(*, max_pages: int, list_url: str = GPC_LIST_URL) -> list[dict]:
+# 🔥 გასწორდა: მოიხსნა ვარსკვლავი (*), რათა app.py-დან გადმოცემული არგუმენტები სწორად წაიკითხოს
+def scrape_gpc(max_pages: int, list_url: str = GPC_LIST_URL) -> list[dict]:
     session = get_session()
     session.headers["Referer"] = GPC_BASE
 
