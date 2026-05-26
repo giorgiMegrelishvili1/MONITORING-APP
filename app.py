@@ -1,4 +1,4 @@
-# ============================================================
+python# ============================================================
 # app.py  — 🍼 ბავშვის კვება: Pro-Level ფასების ინდექსი
 # PSP · Aversi · GPC  |  გაშვება: streamlit run app.py
 # ============================================================
@@ -21,11 +21,15 @@ import streamlit as st
 # ── კონფიგი ─────────────────────────────────────────────────
 try:
     from config import (
-        COL_NAME, COL_PRICE, COL_OLD_PRICE, COL_DISCOUNT,
-        COL_BRAND, COL_CATEGORY, COL_SOURCE, COL_URL,
-        COL_UPDATED, COL_NORM_KEY,
+        COL_NAME, COL_PRICE, COL_OLD_PRICE,
+        COL_CATEGORY, COL_SOURCE, COL_URL,
+        COL_UPDATED,
         MAX_PAGES_PSP, MAX_PAGES_AVERSI, MAX_PAGES_GPC,
     )
+    # 🔥 დაზღვევა: ვქმნით ცვლადებს, რადგან config.py-ში არ გაქვთ
+    COL_DISCOUNT = "discount"
+    COL_BRAND = "brand"
+    COL_NORM_KEY = "norm_key"
 except Exception:
     st.error("config.py ჩატვირთვა ვერ მოხერხდა")
     st.code(traceback.format_exc()); st.stop()
@@ -35,7 +39,8 @@ try:
     from gpc    import scrape_gpc
     from psp    import scrape_psp
     from aversi import scrape_aversi
-    from common import normalize_key, classify_subcategory
+    # 🔥 გასწორდა: მოიხსნა classify_subcategory, რადგან common.py-ში არ გაქვთ
+    from common import normalize_key
 except Exception:
     st.error("სქრეიფერის ფაილი ვერ ჩაიტვირთა")
     st.code(traceback.format_exc()); st.stop()
@@ -44,7 +49,7 @@ except Exception:
 # PAGE SETUP
 # ════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="🍼 ბავშვის კვება · ფასების ინდექსი",
+    page_title="🍼 ბავშვის კვება · ფასების ინგდექსი",
     page_icon="🍼",
     layout="wide",
     initial_sidebar_state="expanded",
