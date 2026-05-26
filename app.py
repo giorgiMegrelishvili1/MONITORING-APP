@@ -53,8 +53,10 @@ st.markdown(
 )
 
 try:
-    from scrapers import scrape_aversi, scrape_gpc, scrape_psp
-    from scrapers.common import normalize_key
+    from aversi import scrape_aversi
+    from gpc import scrape_gpc
+    from psp import scrape_psp
+    from common import normalize_key
 except Exception as _import_err:
     st.error("პროგრამის ფაილები ვერ ჩაიტვირთა (scrapers/config).")
     st.code(str(_import_err))
