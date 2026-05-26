@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-
+import requests
 from bs4 import BeautifulSoup
 
 from config import (
@@ -17,8 +17,7 @@ from config import (
     COL_URL,
     HEADERS,
 )
-# 🔥 გასწორდა: წაიშალა scrapers. პრეფიქსი
-from common import get_session, paginate, sleep_between
+from common import paginate, sleep_between
 
 
 def _is_cloudflare(html: str) -> bool:
@@ -26,7 +25,20 @@ def _is_cloudflare(html: str) -> bool:
 
 
 def _fetch_html(url: str) -> str:
-    session = get_session()
+    """
+    ავერსის ბლოკირების (403 Forbidden) ასავლელი ფუნქცია რეალური ბრაუზერის იმიტაციით.
+    """
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "ka-GE,ka;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Cache-Control": "max-age=0",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1"
+    })
+    
     resp = session.get(url, timeout=45)
     resp.raise_for_status()
     text = resp.text
@@ -84,6 +96,8 @@ def _parse_html(html: str) -> list[dict]:
                 prices.append(float(t))
         if not prices:
             continue
+            
+        # სწორად ვიღებთ პირველ ფასს მასივიდან, რათა კოდი არ გაფუჭდეს
         final = prices[0]
         old = None
         old_block = item.select_one(".ty-list-price, .ty-strike")
@@ -113,7 +127,6 @@ def _detect_last_page(html: str) -> int:
     return max(pages) if pages else 1
 
 
-# 🔥 გასწორდა: მოიხსნა ვარსკვლავი (*), რათა პოზიციური არგუმენტი app.py-დან სწორად შემოვიდეს
 def scrape_aversi(max_pages: int) -> list[dict]:
     first_html = _fetch_html(AVERSI_LIST_URL)
     last = min(_detect_last_page(first_html), max_pages)
