@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import requests
 from bs4 import BeautifulSoup
 
 from config import (
@@ -20,44 +19,24 @@ from config import (
 from common import paginate, sleep_between
 
 
-def _is_cloudflare(html: str) -> bool:
-    return "Just a moment" in html or "cf-browser-verification" in html
-
-
 def _fetch_html(url: str) -> str:
     """
-    ავერსის ბლოკირების (403 Forbidden) ასავლელი ფუნქცია რეალური ბრაუზერის იმიტაციით.
+    ავერსის ბლოკირების ასავლელი ფუნქცია Playwright-ის გამოყენებით.
     """
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "ka-GE,ka;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Cache-Control": "max-age=0",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1"
-    })
-    
-    resp = session.get(url, timeout=45)
-    resp.raise_for_status()
-    text = resp.text
-    if _is_cloudflare(text):
-        return _fetch_html_playwright(url)
-    return text
-
-
-def _fetch_html_playwright(url: str) -> str:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
         raise RuntimeError(
-            "Aversi: Cloudflare დაბლოკავს requests-ს. დააყენეთ: pip install playwright && playwright install chromium"
+            "Streamlit Cloud-ზე Playwright არ არის დაინსტალირებული. შეამოწმეთ requirements.txt ფაილი."
         ) from exc
 
     with sync_playwright() as p:
+        # ვუშვებთ ბრაუზერს
         browser = p.chromium.launch(headless=True)
-        page = browser.new_page(extra_http_headers=HEADERS)
+        # ვუწერთ რეალური მომხმარებლის იმიტაციას (User-Agent)
+        page = browser.new_page(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        
+        # შევდივართ საიტზე და ველოდებით მის სრულად ჩატვირთვას
         page.goto(url, wait_until="networkidle", timeout=90000)
         html = page.content()
         browser.close()
@@ -97,7 +76,6 @@ def _parse_html(html: str) -> list[dict]:
         if not prices:
             continue
             
-        # სწორად ვიღებთ პირველ ფასს მასივიდან, რათა კოდი არ გაფუჭდეს
         final = prices[0]
         old = None
         old_block = item.select_one(".ty-list-price, .ty-strike")
