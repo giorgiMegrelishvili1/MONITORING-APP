@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import json  # დაგვჭირდება პროქსის პასუხის წასაკითხად
 import requests
 from bs4 import BeautifulSoup
 
@@ -22,17 +21,20 @@ from common import paginate, sleep_between
 
 def _fetch_html(url: str) -> str:
     """
-    ავერსის ბლოკირების ასავლელი ფუნქცია Allorigins უფასო პროქსი-სერვისის გამოყენებით.
+    ავერსის ბლოკირების ასავლელი ფუნქცია ალტერნატიული CorsProxy.io-ს გამოყენებით.
+    ეს პროქსი კოდს აბრუნებს პირდაპირ, JSON შეფუთვის გარეშე.
     """
-    # ვახვევთ ორიგინალ ლინკს პროქსის მისამართში, რათა Cloudflare-მა ვერ დაგვბლოკოს
-    proxy_url = f"https://allorigins.win{requests.utils.quote(url)}"
+    # ვიყენებთ ახალ, უფრო ძლიერ პროქსის რეალური ბრაუზერის იმიტაციისთვის
+    proxy_url = f"https://corsproxy.io/?{requests.utils.quote(url)}"
     
-    resp = requests.get(proxy_url, timeout=40)
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    })
+    
+    resp = session.get(proxy_url, timeout=30)
     resp.raise_for_status()
-    
-    # სერვისი პასუხს აბრუნებს JSON ფორმატში, სადაც "contents" არის საიტის HTML კოდი
-    data = resp.json()
-    return data.get("contents", "")
+    return resp.text
 
 
 def _page_url(page: int) -> str:
@@ -68,7 +70,7 @@ def _parse_html(html: str) -> list[dict]:
         if not prices:
             continue
             
-        final = prices[0]
+        final = prices[0] # სწორად ვიღებთ რიცხვს
         old = None
         old_block = item.select_one(".ty-list-price, .ty-strike")
         if old_block:
@@ -118,5 +120,4 @@ def scrape_aversi(max_pages: int) -> list[dict]:
         sleep_between()
         return rows
     except Exception:
-        # შეცდომის შემთხვევაშიც კი არ თიშავს მთლიან საიტსს
         return []
