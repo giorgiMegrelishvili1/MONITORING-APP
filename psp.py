@@ -173,3 +173,4 @@ def scrape_psp(max_pages: int = MAX_PAGES_PSP) -> list[dict]:
         browser.close()
 
     return results
+
