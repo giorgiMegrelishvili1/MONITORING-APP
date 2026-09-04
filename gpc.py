@@ -169,3 +169,4 @@ def scrape_gpc(max_pages: int = MAX_PAGES_GPC) -> list[dict]:
         time.sleep(random.uniform(0.4, 0.9))
 
     return results
+
