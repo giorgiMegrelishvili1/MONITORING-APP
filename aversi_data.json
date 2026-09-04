@@ -71,3 +71,4 @@ def scrape_aversi(max_pages: int) -> list[dict]:
         pass
 
     return rows
+
