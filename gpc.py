@@ -1,93 +1,117 @@
 # ============================================================
-# gpc.py  — GPC / GEPHA სქრეიფერი (Playwright Chromium)
-# GPC — Next.js / Dynamic rendered JS
+# gpc.py  — GPC (gpc.ge) სქრეიფერი
+# GPC აგებულია Next.js-ზე, მაგრამ პროდუქტების სია სერვერის მხარეს
+# წინასწარ არის რენდერილი (SSR) — უბრალო requests საკმარისია,
+# ბრაუზერი/Playwright არ სჭირდება.
 # ============================================================
 from __future__ import annotations
 
-import time
+import re
 import json
+import time
 import random
+import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 
 from config import (
-    GPC_LIST_URL, MAX_PAGES_GPC, PW_TIMEOUT, PW_WAIT_MS,
+    GPC_LIST_URL, GPC_CATEGORY_ID, MAX_PAGES_GPC,
+    HEADERS, HTTP_TIMEOUT,
     COL_NAME, COL_PRICE, COL_OLD_PRICE, COL_DISCOUNT,
     COL_BRAND, COL_CATEGORY, COL_SOURCE, COL_URL, COL_UPDATED, COL_NORM_KEY,
 )
-from common import parse_price, normalize_key, extract_brand, classify_subcategory, calc_discount_pct
+from common import (
+    parse_price, parse_all_prices, normalize_key, extract_brand,
+    classify_subcategory, calc_discount_pct, find_product_lists, get_field,
+)
 
 
-def _parse_page(soup: BeautifulSoup, page_url: str) -> list[dict]:
-    records = []
+def _record_from_json_product(prod: dict, page_url: str) -> dict | None:
+    name = get_field(prod, {"name", "title", "productname", "product_name"})
+    price = get_field(prod, {"price", "currentprice", "current_price", "salesprice", "sales_price"})
+    if not name or price in (None, ""):
+        return None
+    try:
+        price = float(str(price).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
 
-    # 1. ვამოწმებთ Next.js JSON სტრუქტურას (GPC-ს ახალი პლატფორმა)
-    next_data = soup.find("script", id="__NEXT_DATA__")
-    if next_data:
+    old_price_raw = get_field(prod, {"oldprice", "old_price", "regularprice", "regular_price"})
+    old_price = None
+    if old_price_raw not in (None, ""):
         try:
-            data = json.loads(next_data.string)
-            products = data.get("props", {}).get("pageProps", {}).get("products", [])
-            if products:
-                for prod in products:
-                    name = prod.get("name", "").strip() or prod.get("title", "").strip()
-                    if not name: 
-                        continue
-                    price = float(prod.get("price", 0))
-                    old_price = float(prod.get("old_price", 0)) if prod.get("old_price") else None
-                    
-                    prod_id = prod.get("id") or prod.get("slug")
-                    href = f"https://gpc.ge{prod_id}" if prod_id else page_url
+            old_price = float(str(old_price_raw).replace(",", "."))
+        except (TypeError, ValueError):
+            old_price = None
 
-                    records.append({
-                        COL_NAME:      name[:100],
-                        COL_PRICE:     price,
-                        COL_OLD_PRICE: old_price if (old_price and old_price > price) else None,
-                        COL_DISCOUNT:  calc_discount_pct(old_price, price),
-                        COL_BRAND:     extract_brand(name),
-                        COL_CATEGORY:  classify_subcategory(name),
-                        COL_SOURCE:    "GPC",
-                        COL_URL:       href,
-                        COL_NORM_KEY:  normalize_key(name),
-                        COL_UPDATED:   datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    })
-                return records
-        except Exception:
-            pass
+    slug = get_field(prod, {"slug", "url", "urlkey", "url_key"})
+    pid = get_field(prod, {"id", "productid", "product_id"})
+    href = f"https://gpc.ge/en/details/{slug}?product={pid}" if slug else page_url
 
-    # 2. ალტერნატიული გზა: ახალი HTML ტექსტური სელექტორები (ლარის "₾" ნიშნით)
-    price_tags = soup.find_all(string=lambda text: text and " ₾" in text)
-    for price_tag in price_tags:
-        price_container = price_tag.parent
-        if not price_container: continue
-        card = price_container.find_parent("div")
-        if not card: continue
+    return {
+        COL_NAME:      str(name)[:100],
+        COL_PRICE:     price,
+        COL_OLD_PRICE: old_price if (old_price and old_price > price) else None,
+        COL_DISCOUNT:  calc_discount_pct(old_price, price),
+        COL_BRAND:     extract_brand(str(name)),
+        COL_CATEGORY:  classify_subcategory(str(name)),
+        COL_SOURCE:    "GPC",
+        COL_URL:       href,
+        COL_NORM_KEY:  normalize_key(str(name)),
+        COL_UPDATED:   datetime.now().strftime("%Y-%m-%d %H:%M"),
+    }
 
-        name_el = card.find(string=lambda text: text and " - " in text)
-        if not name_el:
-            name_elements = [s.strip() for s in card.stripped_strings if len(s.strip()) > 5 and "₾" not in s]
-            name = name_elements[0] if name_elements else None
-        else:
-            name = name_el.strip()
 
-        if not name or len(name) < 2: continue
-        if any(r[COL_NAME] == name[:100] for r in records): continue
+def _parse_via_next_data(soup: BeautifulSoup, page_url: str) -> list[dict]:
+    next_data = soup.find("script", id="__NEXT_DATA__")
+    if not next_data or not next_data.string:
+        return []
+    try:
+        data = json.loads(next_data.string)
+    except Exception:
+        return []
 
-        price = parse_price(price_tag)
-        if price is None: continue
+    records = []
+    for lst in find_product_lists(data):
+        for prod in lst:
+            rec = _record_from_json_product(prod, page_url)
+            if rec:
+                records.append(rec)
+    return records
 
-        old_price = None
-        all_prices = card.find_all(string=lambda text: text and "₾" in text)
-        for p_str in all_prices:
-            if " ₾" not in p_str:
-                parsed_old = parse_price(p_str)
-                if parsed_old and parsed_old > price:
-                    old_price = parsed_old
-                    break
 
-        link_el = card.select_one("a[href*='product']") or card.select_one("a[href*='medicament']") or card.select_one("a[href]")
-        href = link_el["href"] if link_el else page_url
-        if href and not href.startswith("http"):
-            href = "https://gpc.ge" + href
+def _parse_via_html(soup: BeautifulSoup, page_url: str) -> list[dict]:
+    """
+    ალტერნატივა, თუ __NEXT_DATA__-ში ვერ ვიპოვეთ პროდუქტების სია:
+    ვეძებთ პროდუქტის დეტალების ბმულებს (href შეიცავს '/details/')
+    და მათ გვერდით ფასს ('₾' სიმბოლოთი).
+    """
+    records = []
+    seen = set()
+    links = soup.select("a[href*='/details/']")
+
+    for a in links:
+        href = a.get("href", "")
+        if not href or href in seen:
+            continue
+        text_blob = a.get_text(" ", strip=True)
+        if "₾" not in text_blob:
+            continue
+        seen.add(href)
+
+        prices = parse_all_prices(text_blob)
+        if not prices:
+            continue
+        price = min(prices)
+        old_price = max(prices) if len(prices) > 1 and max(prices) > price else None
+
+        # სახელი — ტექსტიდან ფასის ნაწილის მოცილებით (მიახლოებით)
+        name = re.split(r"\d{1,6}(?:[.,]\d{1,2})?\s*₾", text_blob)[0].strip()
+        name = re.sub(r"\s{2,}", " ", name).strip(" -")
+        if not name or len(name) < 2:
+            continue
+
+        full_href = href if href.startswith("http") else f"https://gpc.ge{href}"
 
         records.append({
             COL_NAME:      name[:100],
@@ -97,7 +121,7 @@ def _parse_page(soup: BeautifulSoup, page_url: str) -> list[dict]:
             COL_BRAND:     extract_brand(name),
             COL_CATEGORY:  classify_subcategory(name),
             COL_SOURCE:    "GPC",
-            COL_URL:       href,
+            COL_URL:       full_href,
             COL_NORM_KEY:  normalize_key(name),
             COL_UPDATED:   datetime.now().strftime("%Y-%m-%d %H:%M"),
         })
@@ -106,47 +130,42 @@ def _parse_page(soup: BeautifulSoup, page_url: str) -> list[dict]:
 
 
 def scrape_gpc(max_pages: int = MAX_PAGES_GPC) -> list[dict]:
-    """
-    GPC — Playwright Chromium სქრეიფი.
-    """
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
-        return []
-
     results: list[dict] = []
+    session = requests.Session()
+    session.headers.update(HEADERS)
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True, 
-            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"]
-        )
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            viewport={"width": 1440, "height": 900},
-            locale="ka-GE",
-        )
-        page = context.new_page()
+    seen_keys: set[str] = set()
 
-        for pg in range(1, max_pages + 1):
-            url = f"{GPC_LIST_URL}&page={pg}"
-            try:
-                page.goto(url, wait_until="domcontentloaded", timeout=PW_TIMEOUT)
-                page.wait_for_timeout(3000)
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight / 3);")
-                page.wait_for_timeout(1000)
-            except Exception:
+    for pg in range(1, max_pages + 1):
+        url = f"{GPC_LIST_URL}?category={GPC_CATEGORY_ID}&page={pg}"
+        try:
+            resp = session.get(url, timeout=HTTP_TIMEOUT)
+            if resp.status_code != 200:
                 break
+        except Exception:
+            break
 
-            soup = BeautifulSoup(page.content(), "lxml")
-            page_records = _parse_page(soup, url)
+        soup = BeautifulSoup(resp.text, "lxml")
 
-            if not page_records:
-                break
+        page_records = _parse_via_next_data(soup, url)
+        if not page_records:
+            page_records = _parse_via_html(soup, url)
 
-            results.extend(page_records)
-            time.sleep(random.uniform(1.5, 3.0))
+        if not page_records:
+            break
 
-        browser.close()
+        # დუბლიკატების გაფილტვრა (URL-პარამეტრით პაგინაცია ხანდახან იმეორებს)
+        new_records = [r for r in page_records if r[COL_URL] not in seen_keys]
+        if not new_records:
+            break
+        for r in new_records:
+            seen_keys.add(r[COL_URL])
+
+        results.extend(new_records)
+
+        if len(page_records) < 5:
+            break
+
+        time.sleep(random.uniform(0.4, 0.9))
 
     return results
