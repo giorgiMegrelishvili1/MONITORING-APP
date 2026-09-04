@@ -1,19 +1,18 @@
 # ==============================================================================
-# 🍼 BABY FOOD PRICE INDEX — DARK EXECUTIVE DASHBOARD
+# 🍼 BABY FOOD PRICE INDEX — PERFECTED DARK DASHBOARD
 # ==============================================================================
 from __future__ import annotations
 
 import re
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 1. PAGE SETUP & DARK THEME CSS
+# 1. PAGE SETUP & PERFECTED CSS
 # ══════════════════════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Page: Home · Analytics Dashboard",
+    page_title="Executive Analytics Dashboard",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -21,31 +20,28 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif !important;
-        background-color: #0E1117 !important;
+        background-color: #0B0E14 !important;
         color: #E2E8F0 !important;
     }
     
-    /* Dark Background Override */
     .stApp {
-        background-color: #0E1117;
+        background-color: #0B0E14;
     }
     
-    /* Sidebar Styling */
     section[data-testid="stSidebar"] {
-        background-color: #161B22 !important;
-        border-right: 1px solid #21262D !important;
+        background-color: #121721 !important;
+        border-right: 1px solid #1E2636 !important;
     }
 
-    /* Top Page Banner */
     .dark-header {
-        background-color: #161B22;
-        border: 1px solid #21262D;
-        border-radius: 8px;
-        padding: 12px 20px;
+        background-color: #121721;
+        border: 1px solid #1E2636;
+        border-radius: 10px;
+        padding: 14px 22px;
         margin-bottom: 20px;
         display: flex;
         align-items: center;
@@ -54,219 +50,173 @@ st.markdown("""
     
     .page-title {
         color: #FFFFFF;
-        font-size: 1.1rem;
-        font-weight: 600;
+        font-size: 1.15rem;
+        font-weight: 700;
         margin: 0;
     }
 
-    /* KPI Metric Cards Custom Design */
+    /* Fixed KPI Cards */
     .kpi-card {
-        background: #161B22;
-        border: 1px solid #21262D;
-        border-radius: 8px;
-        padding: 14px 18px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        background: #121721;
+        border: 1px solid #1E2636;
+        border-radius: 10px;
+        padding: 16px 18px;
+        height: 100%;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
     }
     .kpi-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: #8B949E;
-        font-size: 0.78rem;
-        font-weight: 500;
+        color: #94A3B8;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
     .kpi-sub {
-        color: #6E7681;
+        color: #64748B;
         font-size: 0.7rem;
-        margin-top: 4px;
+        margin-top: 2px;
     }
     .kpi-value {
         color: #FFFFFF;
-        font-size: 1.4rem;
-        font-weight: 700;
-        margin-top: 6px;
-    }
-    
-    /* Section Containers */
-    .chart-box {
-        background: #161B22;
-        border: 1px solid #21262D;
-        border-radius: 8px;
-        padding: 15px;
-        margin-top: 15px;
-    }
-
-    /* Pill Filter Badges */
-    .badge-btn {
-        background-color: #E63946;
-        color: white;
-        padding: 4px 10px;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        display: inline-block;
-        margin-right: 5px;
-        margin-bottom: 5px;
+        font-size: 1.45rem;
+        font-weight: 800;
+        margin-top: 8px;
+        white-space: nowrap;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 2. DEMO DATA PIPELINE
+# 2. HELPER FOR NUMBER FORMATTING (PREVENTS OVERFLOW)
 # ══════════════════════════════════════════════════════════════════════════════
-DEMO_DATA = [
-    {"name": "HiPP Organic 1 (800გ)", "price": 89.90, "brand": "Hipp", "category": "რძის ნაზავი", "source": "PSP", "region": "თბილისი", "sales": 2482205},
-    {"name": "HiPP Organic 1 (800გ)", "price": 92.50, "brand": "Hipp", "category": "რძის ნაზავი", "source": "Aversi", "region": "ბათუმი", "sales": 847300},
-    {"name": "HiPP Organic 1 (800გ)", "price": 88.00, "brand": "Hipp", "category": "რძის ნაზავი", "source": "GPC", "region": "ქუთაისი", "sales": 4964411},
-    {"name": "NAN Optipro 1 (800გ)", "price": 72.00, "brand": "Nan", "category": "რძის ნაზავი", "source": "PSP", "region": "რუსთავი", "sales": 2593682},
-    {"name": "NAN Optipro 1 (800გ)", "price": 74.50, "brand": "Nan", "category": "რძის ნაზავი", "source": "Aversi", "region": "თბილისი", "sales": 351000},
-    {"name": "NAN Optipro 1 (800გ)", "price": 71.00, "brand": "Nan", "category": "რძის ნაზავი", "source": "GPC", "region": "გორის", "sales": 1200000},
-    {"name": "Nutrilon Premium 1", "price": 45.00, "brand": "Nutrilon", "category": "რძის ნაზავი", "source": "PSP", "region": "ზუგდიდი", "sales": 890000},
-    {"name": "Heinz ფაფა (200გ)", "price": 9.90, "brand": "Heinz", "category": "ფაფა", "source": "PSP", "region": "თბილისი", "sales": 450000},
-    {"name": "Semper პიურე (80გ)", "price": 3.43, "brand": "Semper", "category": "პიურე", "source": "GPC", "region": "ბათუმი", "sales": 310000},
-]
+def format_num(val: float) -> str:
+    if val >= 1_000_000_000:
+        return f"{val / 1_000_000_000:.2f}B"
+    if val >= 1_000_000:
+        return f"{val / 1_000_000:.2f}M"
+    if val >= 1_000:
+        return f"{val / 1_000:.1f}K"
+    return str(val)
 
+# Data
+DEMO_DATA = [
+    {"name": "HiPP Organic 1", "price": 89.90, "brand": "Hipp", "category": "რძის ნაზავი", "source": "PSP", "region": "თბილისი", "sales": 2482205481},
+    {"name": "HiPP Organic 1", "price": 92.50, "brand": "Hipp", "category": "რძის ნაზავი", "source": "Aversi", "region": "ბათუმი", "sales": 847300},
+    {"name": "HiPP Organic 1", "price": 88.00, "brand": "Hipp", "category": "რძის ნაზავი", "source": "GPC", "region": "ქუთაისი", "sales": 4964411},
+    {"name": "NAN Optipro 1", "price": 72.00, "brand": "Nan", "category": "რძის ნაზავი", "source": "PSP", "region": "რუსთავი", "sales": 2593682},
+    {"name": "NAN Optipro 1", "price": 74.50, "brand": "Nan", "category": "რძის ნაზავი", "source": "Aversi", "region": "თბილისი", "sales": 3510000},
+]
 df = pd.DataFrame(DEMO_DATA)
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 3. SIDEBAR (LOGO & MENU)
+# 3. SIDEBAR
 # ══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
     st.markdown("""
         <div style="text-align: center; padding: 10px 0;">
-            <div style="font-size: 2.5rem;">🛑</div>
-            <h3 style="color: #E63946; margin: 5px 0 0 0; font-weight: 800;">COMPANY LOGO</h3>
-            <p style="color: #6E7681; font-size: 0.7rem;">Developed & Maintained by Demo</p>
+            <div style="font-size: 2rem;">🛑</div>
+            <h3 style="color: #EF4444; margin: 5px 0 0 0; font-weight: 800;">COMPANY LOGO</h3>
         </div>
     """, unsafe_allow_html=True)
-    
     st.markdown("---")
-    st.markdown("<p style='color: #8B949E; font-size: 0.8rem; font-weight: 600;'>Please Filter</p>", unsafe_allow_html=True)
-    
     selected_cat = st.selectbox("Select Category", ["ყველა"] + sorted(df["category"].unique().tolist()))
     selected_brand = st.selectbox("Select Brand", ["ყველა"] + sorted(df["brand"].unique().tolist()))
-    
-    st.markdown("---")
-    st.markdown("<p style='color: #8B949E; font-size: 0.8rem; font-weight: 600;'>💻 Main Menu</p>", unsafe_allow_html=True)
-    
-    st.button("🔴 Home", use_container_width=True)
-    st.button("👁️ Progress", use_container_width=True)
-
-# Apply Filter
-if selected_cat != "ყველა":
-    df = df[df["category"] == selected_cat]
-if selected_brand != "ყველა":
-    df = df[df["brand"] == selected_brand]
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 4. MAIN LAYOUT
+# 4. MAIN CONTENT
 # ══════════════════════════════════════════════════════════════════════════════
-# Page Header Bar
 st.markdown("""
 <div class="dark-header">
-    <div class="page-title">Page: Home</div>
-    <div style="color: #8B949E; font-size: 0.85rem;">📁 My Excel WorkBook</div>
+    <div class="page-title">Page: Executive Home</div>
+    <div style="color: #64748B; font-size: 0.85rem;">📁 Real-Time Analytics</div>
 </div>
 """, unsafe_allow_html=True)
 
-# KPI Metrics Top Row
+# Metric Cards Row
 k1, k2, k3, k4, k5 = st.columns(5)
 
 with k1:
-    st.markdown("""
+    st.markdown(f"""
     <div class="kpi-card">
         <div class="kpi-header">📌 Total Investment</div>
         <div class="kpi-sub">sum 125</div>
-        <div class="kpi-value">2,482,205,481</div>
-    </div>
-    """, unsafe_allow_html=True)
+        <div class="kpi-value">{format_num(2482205481)}</div>
+    </div>""", unsafe_allow_html=True)
 
 with k2:
-    st.markdown("""
+    st.markdown(f"""
     <div class="kpi-card">
         <div class="kpi-header">📌 Most Frequent</div>
         <div class="kpi-sub">mode 125</div>
-        <div class="kpi-value">847,300</div>
-    </div>
-    """, unsafe_allow_html=True)
+        <div class="kpi-value">{format_num(847300)}</div>
+    </div>""", unsafe_allow_html=True)
 
 with k3:
-    st.markdown("""
+    st.markdown(f"""
     <div class="kpi-card">
         <div class="kpi-header">📌 Average</div>
         <div class="kpi-sub">average 125</div>
-        <div class="kpi-value">4,964,411</div>
-    </div>
-    """, unsafe_allow_html=True)
+        <div class="kpi-value">{format_num(4964411)}</div>
+    </div>""", unsafe_allow_html=True)
 
 with k4:
-    st.markdown("""
+    st.markdown(f"""
     <div class="kpi-card">
         <div class="kpi-header">📌 Central Earnings</div>
         <div class="kpi-sub">median 125</div>
-        <div class="kpi-value">2,593,682</div>
-    </div>
-    """, unsafe_allow_html=True)
+        <div class="kpi-value">{format_num(2593682)}</div>
+    </div>""", unsafe_allow_html=True)
 
 with k5:
-    st.markdown("""
+    st.markdown(f"""
     <div class="kpi-card">
         <div class="kpi-header">📌 Ratings</div>
         <div class="kpi-sub">Rating</div>
         <div class="kpi-value">3.51K</div>
-    </div>
-    """, unsafe_allow_html=True)
+    </div>""", unsafe_allow_html=True)
 
-# Charts Layout (3 Columns like the Image)
+st.markdown("<div style='margin-bottom: 25px;'></div>", unsafe_allow_html=True)
+
+# Charts Layout
 c1, c2, c3 = st.columns([1.2, 1.2, 1])
 
 with c1:
-    st.markdown("<p style='color: #8B949E; font-size: 0.85rem; font-weight: 600; margin-top: 15px;'>Investment by State</p>", unsafe_allow_html=True)
-    fig_line = px.line(
-        df, x="region", y="sales",
-        markers=True,
-        color_discrete_sequence=["#38BDF8"]
-    )
+    st.markdown("<p style='color: #94A3B8; font-size: 0.85rem; font-weight: 600;'>Investment by State</p>", unsafe_allow_html=True)
+    fig_line = px.line(df, x="region", y="sales", markers=True, color_discrete_sequence=["#38BDF8"])
     fig_line.update_layout(
-        paper_bgcolor="#161B22",
-        plot_bgcolor="#161B22",
-        font_color="#8B949E",
-        margin=dict(l=10, r=10, t=20, b=20),
+        paper_bgcolor="#121721",
+        plot_bgcolor="#121721",
+        font_color="#94A3B8",
+        margin=dict(l=10, r=10, t=10, b=10),
         height=320,
-        xaxis=dict(showgrid=False),
-        yaxis=dict(showgrid=True, gridcolor="#21262D")
+        xaxis=dict(showgrid=False, tickangle=-25),
+        yaxis=dict(showgrid=True, gridcolor="#1E2636")
     )
     st.plotly_chart(fig_line, use_container_width=True)
 
 with c2:
-    st.markdown("<p style='color: #8B949E; font-size: 0.85rem; font-weight: 600; margin-top: 15px;'>Investment by Business Type</p>", unsafe_allow_html=True)
-    fig_bar = px.bar(
-        df, y="brand", x="price", orientation="h",
-        color_discrete_sequence=["#0EA5E9"]
-    )
+    st.markdown("<p style='color: #94A3B8; font-size: 0.85rem; font-weight: 600;'>Investment by Business Type</p>", unsafe_allow_html=True)
+    fig_bar = px.bar(df, y="brand", x="price", orientation="h", color_discrete_sequence=["#0EA5E9"])
     fig_bar.update_layout(
-        paper_bgcolor="#161B22",
-        plot_bgcolor="#161B22",
-        font_color="#8B949E",
-        margin=dict(l=10, r=10, t=20, b=20),
+        paper_bgcolor="#121721",
+        plot_bgcolor="#121721",
+        font_color="#94A3B8",
+        margin=dict(l=10, r=10, t=10, b=10),
         height=320,
-        xaxis=dict(showgrid=True, gridcolor="#21262D"),
+        xaxis=dict(showgrid=True, gridcolor="#1E2636"),
         yaxis=dict(showgrid=False)
     )
     st.plotly_chart(fig_bar, use_container_width=True)
 
 with c3:
-    st.markdown("<p style='color: #8B949E; font-size: 0.85rem; font-weight: 600; margin-top: 15px;'>Regions by Ratings</p>", unsafe_allow_html=True)
-    fig_pie = px.pie(
-        df, names="source", values="price",
-        color_discrete_sequence=["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"]
-    )
+    st.markdown("<p style='color: #94A3B8; font-size: 0.85rem; font-weight: 600;'>Regions by Ratings</p>", unsafe_allow_html=True)
+    fig_pie = px.pie(df, names="source", values="price", hole=0.4, color_discrete_sequence=["#3B82F6", "#10B981", "#F59E0B"])
     fig_pie.update_layout(
-        paper_bgcolor="#161B22",
-        plot_bgcolor="#161B22",
-        font_color="#8B949E",
-        margin=dict(l=10, r=10, t=20, b=20),
+        paper_bgcolor="#121721",
+        plot_bgcolor="#121721",
+        font_color="#94A3B8",
+        margin=dict(l=10, r=10, t=10, b=10),
         height=320,
-        showlegend=True
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2)
     )
     st.plotly_chart(fig_pie, use_container_width=True)
