@@ -9,16 +9,16 @@ import sys
 import subprocess
 
 # 🚀 Playwright ბრაუზერის ავტომატური ინსტალაცია Streamlit Cloud-ისთვის
+# (საჭიროა მხოლოდ PSP-ს სქრეიფერისთვის — Aversi და GPC ჩვეულებრივი
+# HTTP მოთხოვნებით მუშაობს და ამ ბლოკზე დამოკიდებული არაა)
 try:
-    # ვამოწმებთ, არის თუ არა უკვე ჩამოტვირთული ბრაუზერის ფაილები
     if not os.path.exists("/home/appuser/.cache/ms-playwright"):
-        print("⏳ Playwright Chromium-ის ბრაუზერი ვერ მოიძებნა. იწყება ფონური ინსტალაცია...")
-        # უზრუნველყოფს სისტემური პაკეტების და ბრაუზერის სრულ გამართვას
-        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
-        subprocess.run([sys.executable, "-m", "playwright", "install-deps"], check=True)
+        print("⏳ Playwright Chromium ვერ მოიძებნა — ფონური ინსტალაცია (მხოლოდ PSP-სთვის)...")
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True, timeout=300)
+        subprocess.run([sys.executable, "-m", "playwright", "install-deps"], check=True, timeout=300)
         print("✅ Playwright-ის გარემო წარმატებით გამართულია!")
 except Exception as e:
-    print(f"⚠️ Playwright-ის ინსტალაციისას დაფიქსირდა ხარვეზი: {e}")
+    print(f"⚠️ Playwright-ის ინსტალაცია ვერ მოხერხდა (PSP დროებით არ იმუშავებს, Aversi/GPC არ დაზარალდება): {e}")
 
 # ── ძირითადი იმპორტები და სამუშაო დირექტორია ──────────────────
 import re
@@ -66,35 +66,119 @@ except Exception:
 # PAGE SETUP
 # ════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="🍼 ბავშვის კვება · ფასების ინდექსი",
+    page_title="🍼 ბავშვის კვება · PRO ფასების ინდექსი",
     page_icon="🍼",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 st.markdown("""
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
-  /* კარდები */
-  div[data-testid="metric-container"] {
-    background:#fff; border:1px solid #e2e8f0; border-radius:14px;
-    padding:16px 20px; box-shadow:0 2px 6px rgba(0,0,0,.06);
+  :root{
+    --ink:#12131a; --ink-soft:#5b5f73;
+    --bg:#f6f7fb; --panel:#ffffff; --panel-border:#e7e9f2;
+    --brand-1:#6d5bff; --brand-2:#9f7bff; --brand-3:#39d0c0;
+    --shadow:0 6px 24px -8px rgba(31,34,64,.14);
+    --shadow-sm:0 2px 10px -4px rgba(31,34,64,.10);
   }
-  /* ტაბები */
-  .stTabs [data-baseweb="tab-list"]{gap:6px}
-  .stTabs [data-baseweb="tab"]{border-radius:8px 8px 0 0; padding:8px 18px}
-  /* ბეჯები */
-  .badge{display:inline-block;padding:3px 11px;border-radius:20px;
-         font-size:12px;font-weight:700;margin:1px}
-  .b-psp   {background:#e3f2fd;color:#0d47a1}
-  .b-aversi{background:#e8f5e9;color:#1b5e20}
-  .b-gpc   {background:#fff3e0;color:#bf360c}
-  /* სათაური */
-  h1{font-size:1.85rem!important}
-  .block-container{padding-top:1.2rem}
-  /* insight box */
-  .insight-box{background:#f0f4ff;border-left:4px solid #3b5bdb;
-               border-radius:8px;padding:12px 16px;margin:6px 0;
-               font-size:.93rem;line-height:1.55}
+
+  html, body, [class*="css"]{ font-family:'Manrope', sans-serif; }
+  h1,h2,h3,.pro-title{ font-family:'Sora', sans-serif !important; letter-spacing:-.01em; }
+
+  .stApp{ background:
+      radial-gradient(1200px 480px at 8% -8%, rgba(109,91,255,.10), transparent 60%),
+      radial-gradient(900px 420px at 100% 0%, rgba(57,208,192,.10), transparent 55%),
+      var(--bg);
+  }
+  .block-container{ padding-top:1.1rem; max-width:1400px; }
+
+  /* ── HERO HEADER ─────────────────────────────────────────── */
+  .pro-hero{
+    background:linear-gradient(120deg, var(--brand-1) 0%, #7a63ff 45%, var(--brand-2) 100%);
+    border-radius:22px; padding:28px 32px; margin-bottom:18px;
+    box-shadow:var(--shadow); position:relative; overflow:hidden;
+  }
+  .pro-hero::after{
+    content:""; position:absolute; inset:0;
+    background:radial-gradient(420px 220px at 88% 15%, rgba(255,255,255,.22), transparent 60%);
+  }
+  .pro-eyebrow{
+    display:inline-flex; align-items:center; gap:6px;
+    background:rgba(255,255,255,.18); color:#fff; font-weight:700;
+    font-size:11.5px; letter-spacing:.10em; text-transform:uppercase;
+    padding:5px 12px; border-radius:999px; margin-bottom:10px;
+    border:1px solid rgba(255,255,255,.28);
+  }
+  .pro-title{ color:#fff; font-size:2.05rem; font-weight:800; margin:0; line-height:1.15; }
+  .pro-subtitle{ color:rgba(255,255,255,.88); font-size:.97rem; margin-top:6px; font-weight:500; }
+
+  /* ── CARDS / METRICS ─────────────────────────────────────── */
+  div[data-testid="stMetric"]{
+    background:var(--panel); border:1px solid var(--panel-border); border-radius:16px;
+    padding:16px 18px 14px; box-shadow:var(--shadow-sm);
+    transition:transform .15s ease, box-shadow .15s ease;
+  }
+  div[data-testid="stMetric"]:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
+  div[data-testid="stMetricLabel"]{ font-weight:700; color:var(--ink-soft); }
+  div[data-testid="stMetricValue"]{ font-family:'Sora', sans-serif; color:var(--ink); }
+
+  /* ── TABS ─────────────────────────────────────────────────── */
+  .stTabs [data-baseweb="tab-list"]{ gap:4px; background:transparent; border-bottom:1px solid var(--panel-border); }
+  .stTabs [data-baseweb="tab"]{
+    border-radius:12px 12px 0 0; padding:10px 20px; font-weight:700;
+    color:var(--ink-soft); background:transparent;
+  }
+  .stTabs [aria-selected="true"]{
+    color:var(--brand-1) !important;
+    background:linear-gradient(180deg, rgba(109,91,255,.10), rgba(109,91,255,.02)) !important;
+  }
+
+  /* ── SIDEBAR ──────────────────────────────────────────────── */
+  section[data-testid="stSidebar"]{
+    background:linear-gradient(180deg, #17182a 0%, #1f2137 100%);
+  }
+  section[data-testid="stSidebar"] *{ color:#e9e9f5 !important; }
+  section[data-testid="stSidebar"] .stButton>button{
+    border-radius:12px; font-weight:700; border:none;
+    background:linear-gradient(120deg, var(--brand-1), var(--brand-2));
+    box-shadow:0 4px 14px -4px rgba(109,91,255,.55);
+  }
+  section[data-testid="stSidebar"] hr{ border-color:rgba(255,255,255,.12) !important; }
+
+  /* ── GENERIC PANELS / DATAFRAMES ─────────────────────────── */
+  div[data-testid="stDataFrame"]{
+    border-radius:14px; overflow:hidden; border:1px solid var(--panel-border);
+    box-shadow:var(--shadow-sm);
+  }
+  .stPlotlyChart{ border-radius:16px; overflow:hidden; }
+
+  /* ── ბეჯები ───────────────────────────────────────────────── */
+  .badge{display:inline-block;padding:4px 13px;border-radius:999px;
+         font-size:11.5px;font-weight:800;margin:1px;letter-spacing:.02em}
+  .b-psp   {background:#e6edff;color:#3346c9}
+  .b-aversi{background:#e2fbf3;color:#0e8f6f}
+  .b-gpc   {background:#fff1e2;color:#c15f00}
+
+  /* ── INSIGHT CARDS ────────────────────────────────────────── */
+  .insight-box{
+    background:var(--panel); border:1px solid var(--panel-border);
+    border-top:3px solid var(--brand-1);
+    border-radius:14px; padding:14px 16px; margin:6px 0;
+    font-size:.92rem; line-height:1.55; color:var(--ink);
+    box-shadow:var(--shadow-sm); height:100%;
+  }
+
+  /* ── SECTION LABEL HELPER ────────────────────────────────── */
+  .pro-section-label{
+    display:inline-block; font-family:'Sora',sans-serif; font-weight:700;
+    font-size:1.02rem; color:var(--ink); margin-bottom:2px;
+  }
+  .pro-caption{ color:var(--ink-soft); font-size:.86rem; }
+
+  /* misc cleanups */
+  #MainMenu{visibility:hidden;} footer{visibility:hidden;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -195,7 +279,7 @@ def load_data(sources: tuple[str, ...], use_demo: bool) -> tuple[pd.DataFrame, b
             status.write(f"⚠️ PSP შეცდომა: {e}")
 
     if "Aversi" in sources:
-        status.write("⏳ Aversi სქრეიფინგი (Playwright)...")
+        status.write("⏳ Aversi სქრეიფინგი (requests)...")
         try:
             r = scrape_aversi()
             rows.extend(r)
@@ -374,9 +458,10 @@ def auto_insights(df: pd.DataFrame, matrix: pd.DataFrame) -> list[str]:
 # SIDEBAR
 # ════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.title("⚙️ კონტროლ პანელი")
+    st.markdown("### ⚙️ კონტროლ პანელი")
 
-    # Playwright check
+    # Playwright check — საჭიროა მხოლოდ PSP-სთვის; Aversi და GPC
+    # უბრალო requests-ით მუშაობს და Playwright-ის გარეშეც იტვირთება.
     try:
         from playwright.sync_api import sync_playwright as _pw  # noqa
         pw_ok = True
@@ -384,14 +469,15 @@ with st.sidebar:
         pw_ok = False
 
     if pw_ok:
-        st.success("✅ Playwright — OK")
+        st.success("✅ PSP (Playwright) — მზადაა")
     else:
-        st.warning("⚠️ Playwright არ არის\n\n`pip install playwright`\n`playwright install chromium`")
+        st.warning("⚠️ PSP საჭიროებს Playwright-ს\n\n`pip install playwright`\n`playwright install chromium`")
+    st.caption("Aversi და GPC ყოველთვის მუშაობს — ბრაუზერი არ სჭირდებათ.")
 
     use_demo = st.toggle(
         "🎭 Demo მონაცემები",
-        value=(not pw_ok),
-        help="გამორთე რეალური სქრეიფინგისთვის"
+        value=False,
+        help="ჩართე, თუ გინდა სანიმუშო მონაცემების ნახვა რეალური სქრეიფინგის გარეშე"
     )
     st.divider()
 
@@ -418,11 +504,13 @@ with st.sidebar:
 # ════════════════════════════════════════════════════════════
 # DATA LOAD
 # ════════════════════════════════════════════════════════════
-st.title("🍼 ბავშვის კვება · ფასების ინდექსი")
-st.markdown(
-    "**კატეგორიის მენეჯმენტის Pro-Dashboard** &nbsp;|&nbsp; "
-    "PSP &nbsp;·&nbsp; Aversi &nbsp;·&nbsp; GPC"
-)
+st.markdown("""
+<div class="pro-hero">
+  <span class="pro-eyebrow">🍼 &nbsp;Category Management · PRO</span>
+  <div class="pro-title">ბავშვის კვება — ფასების ინდექსი</div>
+  <div class="pro-subtitle">PSP &nbsp;·&nbsp; Aversi &nbsp;·&nbsp; GPC &nbsp;— &nbsp;რეალურ დროში მონაცემთა შედარება და ანალიტიკა</div>
+</div>
+""", unsafe_allow_html=True)
 
 df_raw, is_demo = load_data(tuple(sel_sources), use_demo)
 
