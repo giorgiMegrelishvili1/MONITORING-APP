@@ -78,3 +78,4 @@ KNOWN_BRANDS = [
     "Semper", "Frutonanny", "Gerber", "Mamako", "Friso", "Nutrilak", "Kabrita",
     "Baia", "Hero Baby", "Vinni", "Plasmon", "Milyn Paras", "Babybio", "Pico",
 ]
+
